@@ -1,0 +1,26 @@
+{
+  "name": "idec-peronia",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mssql": "^12.7.13",
+    "multer": "^2.5.0",
+    "mysql2": "^3.24.6",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
+  }
+}
