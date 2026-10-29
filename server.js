@@ -176,6 +176,17 @@ async function iniciarBD() {
         );
     `);
 
+    // Crear usuario administrador fijo por defecto si no existe ninguno
+    const totalUsuarios = await db.get('SELECT COUNT(*) AS n FROM usuarios');
+    if (totalUsuarios.n === 0) {
+        const usuarioDefault = 'Andres.cj';
+        const passwordDefault = 'CASTAÑONJUAREZ_2000';
+        const passwordHasheada = hashPassword(passwordDefault);
+        
+        await db.run('INSERT INTO usuarios (usuario, password) VALUES (?, ?)', [usuarioDefault, passwordHasheada]);
+        console.log(`Usuario administrador '${usuarioDefault}' creado automáticamente.`);
+    }
+
     // Redes sociales iniciales (las que antes estaban fijas en index.html)
     const totalRedes = await db.get('SELECT COUNT(*) AS n FROM redes_sociales');
     if (totalRedes.n === 0) {
