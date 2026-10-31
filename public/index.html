@@ -553,6 +553,7 @@
         @media (prefers-reduced-motion: reduce) { .mant-engranes { animation: none; } }
         .mant-titulo { margin: 0.2rem 0 0.8rem; color: var(--accent-red); font-size: 1.7rem; font-weight: 800; }
         .mant-texto { margin: 0 0 1.6rem; color: #475569; font-size: 1.08rem; line-height: 1.7; }
+        .mant-regreso { margin: -0.8rem 0 1.6rem; color: var(--primary); font-weight: 700; font-size: 1.05rem; }
         .mant-versiculo {
             margin: 0; padding: 1.1rem 1.3rem; border-left: 5px solid var(--accent); background: #f8fafc; border-radius: 14px;
             font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 1.3rem; color: var(--primary); line-height: 1.5; text-align: left;
@@ -598,8 +599,9 @@
             <p class="mant-iglesia" id="mant-iglesia-nombre">Iglesia de Dios Evangelio Completo</p>
             <div class="mant-engranes" aria-hidden="true">⚙️</div>
             <h2 class="mant-titulo" id="mant-titulo-txt">Sitio en mantenimiento</h2>
-            <p class="mant-texto">El sitio web está en mantenimiento, por favor regresa más tarde.</p>
-            <blockquote class="mant-versiculo">«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»<cite>Salmo 40:1</cite></blockquote>
+            <p class="mant-texto" id="mant-texto-msg">El sitio web está en mantenimiento, por favor regresa más tarde.</p>
+            <p class="mant-regreso" id="mant-regreso-txt" hidden></p>
+            <blockquote class="mant-versiculo"><span id="mant-versiculo-txt">«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»</span><cite id="mant-cita-txt">Salmo 40:1</cite></blockquote>
         </div>
     </div>
 
@@ -885,6 +887,12 @@
                 if (el === ov || el.tagName === 'SCRIPT') return;
                 if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
             });
+            const poner = (id, v, def) => { const el = document.getElementById(id); if (el) el.innerText = (v && String(v).trim()) || def; };
+            poner('mant-texto-msg', config.mant_mensaje, 'El sitio web está en mantenimiento, por favor regresa más tarde.');
+            poner('mant-versiculo-txt', config.mant_versiculo, '«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»');
+            poner('mant-cita-txt', config.mant_cita, 'Salmo 40:1');
+            const rg = document.getElementById('mant-regreso-txt');
+            if (rg) { rg.innerText = (config.mant_regreso || '').trim(); rg.hidden = !rg.innerText; }
             if (on && config.nombre_iglesia) {
                 const n = document.getElementById('mant-iglesia-nombre');
                 if (n) n.innerText = plainNombre(config.nombre_iglesia);
