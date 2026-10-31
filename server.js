@@ -6,6 +6,7 @@ const { open } = require('sqlite');
 const multer = require('multer');
 const fs = require('fs');
 const crypto = require('crypto');
+const sharp = require('sharp'); // <--- Importado para compresión de imágenes
 
 // Carpeta donde viven los datos (base de datos, fotos y respaldos).
 // En un hosting en la nube, apúntala a un disco persistente con la variable DATA_DIR.
@@ -36,12 +37,33 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
-// Solo imágenes para los cuadros de contenido
+// Solo imágenes para los cuadros de contenido (con multer temporal antes de procesar con sharp)
 const uploadImg = multer({
-    storage: storage,
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => cb(null, uploadDir),
+        filename: (req, file, cb) => cb(null, 'temp-' + Date.now() + path.extname(file.originalname))
+    }),
     limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
 });
+
+// Función auxiliar para procesar y comprimir imágenes con Sharp
+async function procesarImagenSharp(filePath) {
+    const filename = `optimized-${Date.now()}-${Math.round(Math.random() * 1E9)}.webp`;
+    const outputPath = path.join(uploadDir, filename);
+
+    await sharp(filePath)
+        .resize({ width: 1200, withoutEnlargement: true }) // Ancho máximo razonable para web
+        .webp({ quality: 80 }) // Calidad optimizada del 80%
+        .toFile(outputPath);
+
+    // Borrar el archivo temporal original
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+    }
+
+    return `/uploads/${filename}`;
+}
 
 const LAYOUTS = ['arriba', 'abajo', 'izquierda', 'derecha'];
 const TAMANOS = ['pequeno', 'mediano', 'grande', 'completo'];
@@ -71,14 +93,13 @@ function verificarPassword(plain, guardada) {
         const orig = Buffer.from(hash, 'hex');
         return calc.length === orig.length && crypto.timingSafeEqual(calc, orig);
     }
-    // Contraseña antigua en texto plano (se migra a hash en el primer login)
     const a = Buffer.from(plain);
     const b = Buffer.from(guardada);
     return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 const SESION_HORAS = 12;
-const sesiones = new Map(); // token -> expira (ms)
+const sesiones = new Map();
 
 function crearSesion() {
     const token = crypto.randomBytes(32).toString('hex');
@@ -93,8 +114,7 @@ function sesionValida(token) {
     return true;
 }
 
-// Límite simple de intentos de login por IP
-const intentosLogin = new Map(); // ip -> { n, desde }
+const intentosLogin = new Map();
 function loginBloqueado(ip) {
     const r = intentosLogin.get(ip);
     if (!r) return false;
@@ -106,6 +126,7 @@ function registrarFallo(ip) {
     r.n++;
     intentosLogin.set(ip, r);
 }
+
 
 // ============================================================
 //  TIEMPO REAL: Server-Sent Events (index.html se actualiza solo)
@@ -131,7 +152,6 @@ app.get('/api/eventos', (req, res) => {
     req.on('close', () => clientesSSE.delete(res));
 });
 
-// Todas las rutas /api: sin caché; toda escritura exige sesión y avisa a los visitantes
 app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (req.method === 'GET' || req.method === 'HEAD' || req.path === '/login') return next();
@@ -211,7 +231,6 @@ async function iniciarBD() {
         );
     `);
 
-    // Crear usuario administrador fijo por defecto si no existe ninguno
     const totalUsuarios = await db.get('SELECT COUNT(*) AS n FROM usuarios');
     if (totalUsuarios.n === 0) {
         const usuarioDefault = 'Andres.cj';
@@ -222,7 +241,6 @@ async function iniciarBD() {
         console.log(`Usuario administrador '${usuarioDefault}' creado automáticamente.`);
     }
 
-    // Redes sociales iniciales (las que antes estaban fijas en index.html)
     const totalRedes = await db.get('SELECT COUNT(*) AS n FROM redes_sociales');
     if (totalRedes.n === 0) {
         await db.run('INSERT INTO redes_sociales (plataforma, nombre, url) VALUES (?, ?, ?)',
@@ -231,7 +249,6 @@ async function iniciarBD() {
             ['instagram', 'Instagram Oficial', 'https://www.instagram.com/jovenesidec2026']);
     }
 
-    // Migraciones por si la base de datos ya existía
     try { await db.exec(`ALTER TABLE avisos ADD COLUMN hora_inicio TEXT;`); } catch (e) {}
     try { await db.exec(`ALTER TABLE avisos ADD COLUMN hora_fin TEXT;`); } catch (e) {}
     try { await db.exec(`ALTER TABLE apartados ADD COLUMN imagenes TEXT DEFAULT '[]';`); } catch (e) {}
@@ -243,7 +260,6 @@ async function iniciarBD() {
     try { await db.exec(`ALTER TABLE contenido ADD COLUMN tamano TEXT DEFAULT 'mediano';`); } catch (e) {}
     try { await db.exec(`ALTER TABLE apartados ADD COLUMN tamano TEXT DEFAULT 'mediano';`); } catch (e) {}
 
-    // Configuración por defecto
     const configDefault = [
         { clave: 'nombre_iglesia', valor: 'IDEC PERONIA' },
         { clave: 'subtitulo_iglesia', valor: 'Iglesia de Dios Evangelio Completo' },
@@ -265,8 +281,6 @@ async function iniciarBD() {
         }
     }
 
-
-    // Migrar paleta antigua (azul marino/dorado) a la del logo (azul, rojo, amarillo)
     const paletaVieja = { color_primary: '#0a192f', color_accent: '#f1c40f', color_red: '#e74c3c' };
     const paletaNueva = { color_primary: '#0f3380', color_accent: '#ffd400', color_red: '#e8261c' };
     for (const [clave, viejo] of Object.entries(paletaVieja)) {
@@ -276,7 +290,6 @@ async function iniciarBD() {
         }
     }
 
-    // Nombre por defecto -> logotipo en 3 líneas (solo si no lo habías personalizado)
     await db.run("UPDATE configuracion SET valor = ? WHERE clave = 'nombre_iglesia' AND valor = ?", ['IDEC | Ríos de Vida | Ciudad Peronia', 'IDEC PERONIA']);
 
     const seccionesDefault = [
@@ -297,11 +310,9 @@ async function iniciarBD() {
 
     console.log('Base de datos SQLite lista y conectada en: ' + DATA_DIR);
 
-    // Respaldo automático: al iniciar y cada 24 h (se conservan los últimos 7)
     respaldarBD();
     setInterval(respaldarBD, 24 * 3600 * 1000);
 }
-
 
 // APIs Configuración
 app.get('/api/configuracion', async (req, res) => {
@@ -326,7 +337,8 @@ app.put('/api/configuracion', async (req, res) => {
 app.post('/api/configuracion/logo', upload.single('logo'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No se subió archivo' });
-        const logoUrl = `/uploads/${req.file.filename}`;
+        // Comprimir también el logo con sharp
+        const logoUrl = await procesarImagenSharp(req.file.path);
         await db.run('INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['logo_url', logoUrl]);
         res.json({ success: true, logo_url: logoUrl });
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -343,7 +355,6 @@ app.post('/api/login', async (req, res) => {
 
         const user = await db.get('SELECT * FROM usuarios WHERE usuario = ?', [String(usuario).trim()]);
         if (user && verificarPassword(String(password).trim(), user.password)) {
-            // Migrar contraseñas antiguas (texto plano) a hash
             if (!user.password.startsWith('scrypt$')) {
                 await db.run('UPDATE usuarios SET password = ? WHERE id = ?', [hashPassword(String(password).trim()), user.id]);
             }
@@ -395,10 +406,17 @@ app.put('/api/contenido/:seccion', (req, res) => {
             const { titulo, texto, layout, tamano, conservar } = req.body;
 
             let imgs = parseImgs(actual.imagenes);
-            if (conservar !== undefined) {            // solo si el panel envía la lista de imágenes
+            if (conservar !== undefined) {
                 const quedan = parseImgs(conservar).filter(u => imgs.includes(u));
                 imgs.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
-                imgs = quedan.concat((req.files || []).map(f => `/uploads/${f.filename}`));
+                
+                // Procesar cada nueva imagen subida con Sharp
+                const nuevasImgs = [];
+                for (const file of (req.files || [])) {
+                    const optimizedUrl = await procesarImagenSharp(file.path);
+                    nuevasImgs.push(optimizedUrl);
+                }
+                imgs = quedan.concat(nuevasImgs);
             }
             await db.run('UPDATE contenido SET titulo = ?, texto = ?, imagenes = ?, layout = ?, tamano = ? WHERE seccion = ?',
                 [titulo, texto, JSON.stringify(imgs),
@@ -411,7 +429,6 @@ app.put('/api/contenido/:seccion', (req, res) => {
     });
 });
 
-// Mover una sección en el menú (dir: -1 antes, 1 después)
 app.post('/api/contenido/:seccion/mover', async (req, res) => {
     try {
         const dir = Number(req.body.dir) < 0 ? -1 : 1;
@@ -447,7 +464,6 @@ app.get('/api/apartados', async (req, res) => {
     catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-
 app.post('/api/apartados', (req, res) => {
     uploadImg.array('imagenes', 12)(req, res, async (err) => {
         if (err) return res.status(400).json({ error: err.message });
@@ -456,7 +472,14 @@ app.post('/api/apartados', (req, res) => {
             const files = req.files || [];
             if (!seccion) return res.status(400).json({ error: 'Falta la sección' });
             if (!subtitulo.trim() && !contenido.trim() && !files.length) return res.status(400).json({ error: 'El cuadro está vacío' });
-            const imgs = files.map(f => `/uploads/${f.filename}`);
+            
+            // Procesar imágenes con Sharp
+            const imgs = [];
+            for (const file of files) {
+                const optimizedUrl = await procesarImagenSharp(file.path);
+                imgs.push(optimizedUrl);
+            }
+
             const mx = await db.get('SELECT COALESCE(MAX(orden), 0) AS m FROM apartados WHERE seccion = ?', [seccion]);
             await db.run('INSERT INTO apartados (seccion, subtitulo, contenido, imagenes, layout, tamano, orden) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [seccion, subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', mx.m + 1]);
@@ -475,7 +498,14 @@ app.put('/api/apartados/:id', (req, res) => {
             const antes = parseImgs(actual.imagenes);
             const quedan = parseImgs(conservar).filter(u => antes.includes(u));
             antes.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
-            const imgs = quedan.concat((req.files || []).map(f => `/uploads/${f.filename}`));
+            
+            const nuevasImgs = [];
+            for (const file of (req.files || [])) {
+                const optimizedUrl = await procesarImagenSharp(file.path);
+                nuevasImgs.push(optimizedUrl);
+            }
+            const imgs = quedan.concat(nuevasImgs);
+
             if (!subtitulo.trim() && !contenido.trim() && !imgs.length) return res.status(400).json({ error: 'El cuadro está vacío' });
             await db.run('UPDATE apartados SET subtitulo = ?, contenido = ?, imagenes = ?, layout = ?, tamano = ? WHERE id = ?',
                 [subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', req.params.id]);
@@ -580,7 +610,7 @@ app.delete('/api/avisos/:id', async (req, res) => {
     }
 });
 
-// Galería
+// Galería (Nota: Si subes videos pesados a la galería, multer los deja directos; las imágenes de galería también se pueden comprimir si gustas)
 app.get('/api/galeria', async (req, res) => {
     try {
         const items = await db.all('SELECT * FROM galeria ORDER BY id DESC');
@@ -599,8 +629,18 @@ app.post('/api/galeria', (req, res) => {
 
             for (let i = 0; i < req.files.length; i++) {
                 const file = req.files[i];
-                const url_recurso = `/uploads/${file.filename}`;
-                const tipo = file.mimetype.startsWith('video') ? 'video' : 'imagen';
+                let url_recurso = `/uploads/${file.filename}`;
+                let tipo = file.mimetype.startsWith('video') ? 'video' : 'imagen';
+
+                // Si es imagen en la galería, la comprimimos con Sharp para ahorrar espacio
+                if (tipo === 'imagen') {
+                    try {
+                        url_recurso = await procesarImagenSharp(file.path);
+                    } catch (e) {
+                        // Si falla la compresión, mantiene el archivo original
+                    }
+                }
+
                 await db.run('INSERT INTO galeria (titulo, tipo, url_recurso) VALUES (?, ?, ?)', [titulo, tipo, url_recurso]);
             }
             res.json({ success: true, message: 'Archivos subidos correctamente' });
