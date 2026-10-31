@@ -874,6 +874,32 @@
         }
 
 
+
+        // ===== VISTA PREVIA (desde el panel de administración) =====
+        const ES_PREVIA = new URLSearchParams(location.search).get('preview') === '1';
+        function aplicarVistaPrevia(config) {
+            if (!ES_PREVIA) return config;
+            try { return { ...config, ...JSON.parse(localStorage.getItem('idec_preview') || '{}') }; } catch (e) { return config; }
+        }
+        if (ES_PREVIA) {
+            document.addEventListener('DOMContentLoaded', () => {
+                const b = document.createElement('div');
+                b.id = 'banner-previa';
+                b.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:100000;background:#111827;color:#fff;padding:10px 18px;border-radius:50px;font:600 14px/1.2 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;gap:12px;align-items:center;';
+                b.innerHTML = '<span>👁️ VISTA PREVIA: aún no está publicado</span><button style="background:#ffd400;color:#111827;border:0;border-radius:20px;padding:5px 12px;font-weight:700;cursor:pointer;" onclick="window.close()">Cerrar</button>';
+                document.body.appendChild(b);
+            });
+        }
+
+        // ===== CONTADOR DE VISITAS (anónimo) =====
+        function enviarVisita(tipo, seccion) {
+            if (ES_PREVIA) return;
+            try {
+                fetch('/api/visitas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, seccion: seccion || null }), keepalive: true }).catch(() => {});
+            } catch (e) {}
+        }
+        try { if (!sessionStorage.getItem('idec_visita')) { sessionStorage.setItem('idec_visita', '1'); enviarVisita('visita'); } } catch (e) {}
+
         // ===== MODO MANTENIMIENTO: bloquea la navegación mientras esté encendido =====
         function aplicarMantenimiento(config) {
             const on = config.modo_mantenimiento === true || config.modo_mantenimiento === 1 ||
@@ -884,7 +910,7 @@
             document.body.style.overflow = on ? 'hidden' : '';
             // "inert" impide clics, foco con teclado (Tab) y lectores de pantalla en todo lo demás
             Array.from(document.body.children).forEach(el => {
-                if (el === ov || el.tagName === 'SCRIPT') return;
+                if (el === ov || el.tagName === 'SCRIPT' || el.id === 'banner-previa') return;
                 if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
             });
             const poner = (id, v, def) => { const el = document.getElementById(id); if (el) el.innerText = (v && String(v).trim()) || def; };
@@ -905,11 +931,15 @@
                     fetch('/api/configuracion', NS), fetch('/api/contenido', NS),
                     fetch('/api/avisos', NS), fetch('/api/redes-sociales', NS), fetch('/api/apartados', NS)
                 ]);
-                const config = await resConf.json();
+                const config = aplicarVistaPrevia(await resConf.json());
                 cfgGlobal = config;
                 aplicarMantenimiento(config);
                 const contenidos = await resCont.json();
                 listaAvisosGlobal = await resAv.json();
+                if ([true, 1, '1', 'true'].includes(config.ocultar_vencidos)) {
+                    const hoyF = hoyStr();
+                    listaAvisosGlobal = listaAvisosGlobal.filter(a => (a.fecha_fin || a.fecha_inicio || '9999').substring(0, 10) >= hoyF);
+                }
                 redesCache = resRedes.ok ? await resRedes.json() : [];
                 apartadosCache = resApart.ok ? await resApart.json() : [];
 
@@ -1051,6 +1081,7 @@
 
         function mostrarSeccionPublica(nombreSeccion, elementoNav) {
             seccionActiva = nombreSeccion;
+            enviarVisita('seccion', nombreSeccion);
             elementoNav = elementoNav || document.querySelector(`#public-nav-container a[data-seccion="${nombreSeccion}"]`);
             document.getElementById('public-nav-container').classList.remove('abierto');
             document.querySelectorAll('#public-vistas-container .seccion-vista').forEach(v => v.classList.remove('activa'));
