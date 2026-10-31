@@ -444,7 +444,23 @@
         @media (min-width: 769px) {
             .bloque.lay-izquierda, .bloque.lay-derecha { grid-column: 1 / -1; flex-direction: row; align-items: center; }
             .bloque.lay-derecha { flex-direction: row-reverse; }
-            .bloque.lay-izquierda .bloque-imgs, .bloque.lay-derecha .bloque-imgs { flex: 0 0 42%; }
+        }
+
+        /* ===== Imágenes dentro de cualquier tarjeta: posición y tamaño ===== */
+        .card-con-img { display: flex; flex-direction: column; gap: 1.4rem; }
+        .card-con-img > .bloque-texto { flex: 1; min-width: 0; }
+        .bloque-imgs { margin-left: auto; margin-right: auto; width: 100%; }
+        .bloque-imgs.t-pequeno { max-width: 260px; }
+        .bloque-imgs.t-mediano { max-width: 520px; }
+        .bloque-imgs.t-grande { max-width: 820px; }
+        .bloque-imgs.t-completo { max-width: none; }
+        @media (min-width: 769px) {
+            .card-con-img.lay-izquierda { flex-direction: row; align-items: flex-start; }
+            .card-con-img.lay-derecha { flex-direction: row-reverse; align-items: flex-start; }
+            .lay-izquierda.lb-grupo > .bloque-imgs, .lay-derecha.lb-grupo > .bloque-imgs { flex: 0 0 auto; margin: 0; max-width: none; width: 38%; }
+            .lay-izquierda.lb-grupo > .bloque-imgs.t-pequeno, .lay-derecha.lb-grupo > .bloque-imgs.t-pequeno { width: 24%; }
+            .lay-izquierda.lb-grupo > .bloque-imgs.t-grande, .lay-derecha.lb-grupo > .bloque-imgs.t-grande { width: 52%; }
+            .lay-izquierda.lb-grupo > .bloque-imgs.t-completo, .lay-derecha.lb-grupo > .bloque-imgs.t-completo { width: 66%; }
         }
 
         .modal-overlay {
@@ -653,13 +669,34 @@
 
         function parseImgs(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
 
+        function htmlImgs(imgs, tamano) {
+            const t = ['pequeno', 'mediano', 'grande', 'completo'].includes(tamano) ? tamano : 'mediano';
+            return `<div class="bloque-imgs n${Math.min(imgs.length, 4)} t-${t}">${imgs.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-lb onclick="abrirLB(this)">`).join('')}</div>`;
+        }
+
         function htmlBloque(b, ctrl = '') {
             const imgs = parseImgs(b.imagenes);
-            const lay = ['izquierda', 'derecha'].includes(b.layout) ? b.layout : 'arriba';
-            const galeria = imgs.length
-                ? `<div class="bloque-imgs n${Math.min(imgs.length, 4)}">${imgs.map(u => `<img src="${esc(u)}" loading="lazy" alt="" data-lb onclick="abrirLB(this)">`).join('')}</div>` : '';
+            const lay = ['abajo', 'izquierda', 'derecha'].includes(b.layout) ? b.layout : 'arriba';
+            const galeria = imgs.length ? htmlImgs(imgs, b.tamano) : '';
             const texto = `<div class="bloque-texto">${b.subtitulo ? `<h3>${esc(b.subtitulo)}</h3>` : ''}${b.contenido ? `<p class="texto-Dinamico">${esc(b.contenido)}</p>` : ''}</div>`;
-            return `<div class="card bloque lay-${lay} lb-grupo">${ctrl}${galeria}${texto}</div>`;
+            return `<div class="card bloque lay-${lay} lb-grupo">${ctrl}${lay === 'abajo' ? texto + galeria : galeria + texto}</div>`;
+        }
+
+        // Pone las imágenes de la sección dentro de su tarjeta principal, donde el admin las eligió
+        function aplicarImagenesSeccion(div, c) {
+            const imgs = parseImgs(c.imagenes);
+            const card = div.querySelector('.card');
+            if (!imgs.length || !card) return;
+            const lay = ['abajo', 'izquierda', 'derecha'].includes(c.layout) ? c.layout : 'arriba';
+            const html = htmlImgs(imgs, c.tamano);
+            card.classList.add('card-con-img', 'lb-grupo', 'lay-' + lay);
+            if (lay === 'arriba') { card.insertAdjacentHTML('afterbegin', html); return; }
+            if (lay === 'abajo') { card.insertAdjacentHTML('beforeend', html); return; }
+            const texto = document.createElement('div');
+            texto.className = 'bloque-texto';
+            while (card.firstChild) texto.appendChild(card.firstChild);
+            card.insertAdjacentHTML('afterbegin', html);
+            card.appendChild(texto);
         }
 
         function htmlBloques(seccion) {
@@ -853,6 +890,7 @@
                                 <ul class="horarios-list" id="public-lista-horarios-${index}"></ul>
                             </div>
                         `;
+                        aplicarImagenesSeccion(divSeccion, c);
                         divSeccion.insertAdjacentHTML('beforeend', htmlBloques(c.seccion));
                         vistasContainer.appendChild(divSeccion);
                         renderizarListaHorariosPublico(c.texto, `public-lista-horarios-${index}`);
@@ -924,6 +962,7 @@
                             </div>
                         `;
                     }
+                    aplicarImagenesSeccion(divSeccion, c);
                     divSeccion.insertAdjacentHTML('beforeend', htmlBloques(c.seccion));
                     vistasContainer.appendChild(divSeccion);
                 }
@@ -1068,4 +1107,4 @@
         }
     </script>
 </body>
-</html> 
+</html>
