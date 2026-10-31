@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#0f3380">
-    <title id="meta-titulo">IDEC Peronia - Panel de Administración.</title>
+    <title id="meta-titulo">IDEC Peronia - Panel de Administración</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link id="favicon-link" rel="icon" type="image/png" sizes="any" href="idec_logo.png">
@@ -679,164 +678,43 @@
             .calendar-widget { padding: 1rem; }
         }
 
-        /* ======================================================================
-           DISEÑO ADAPTABLE (RESPONSIVE WEB DESIGN) — capa de refuerzo
-           Se agrega al final para complementar las reglas existentes:
-           áreas seguras (notch), tipografía fluida, objetivos táctiles de 44px,
-           hover solo con mouse, alturas dinámicas (dvh) y orientación horizontal.
-           ====================================================================== */
-        :root { --hx: 2.5rem; --hy: 1.2rem; --cx: 20px; }
-        @media (max-width: 1100px) { :root { --hx: 1.4rem; --hy: .9rem; } }
-        @media (max-width: 768px)  { :root { --cx: .9rem; } }
-        @media (max-width: 480px)  { :root { --hx: 1rem; --hy: .8rem; } }
-
-        /* Corrección: el pie medía 100% + su relleno (desbordaba y se descentraba) */
-        footer { box-sizing: border-box; }
-
-        /* Áreas seguras: el contenido no queda bajo el notch ni la barra del sistema */
-        header {
-            padding: calc(var(--hy) + env(safe-area-inset-top, 0px)) calc(var(--hx) + env(safe-area-inset-right, 0px)) var(--hy) calc(var(--hx) + env(safe-area-inset-left, 0px));
-            gap: .5rem;
+        /* ===== INTERRUPTOR DE MANTENIMIENTO ===== */
+        .mant-bar {
+            max-width: 1000px; width: calc(100% - 40px); box-sizing: border-box;
+            margin: 1.5rem auto -1.5rem; padding: 1rem 1.5rem;
+            background: rgba(255,255,255,0.98); border-radius: 20px;
+            border-left: 6px solid #94a3b8;
+            box-shadow: 0 10px 30px rgba(15,51,128,0.10);
+            display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; flex-wrap: wrap;
+            transition: var(--transition);
         }
-        .container {
-            padding-left: calc(var(--cx) + env(safe-area-inset-left, 0px));
-            padding-right: calc(var(--cx) + env(safe-area-inset-right, 0px));
+        .mant-bar.on { border-left-color: var(--accent-red); background: #fff5f4; }
+        .mant-info strong { display: block; color: var(--primary); font-size: 1.05rem; }
+        .mant-info span { font-size: 0.88rem; color: #64748b; }
+        .mant-bar.on .mant-info span { color: var(--accent-red); font-weight: 600; }
+        .mant-switch { position: relative; width: 110px; height: 58px; flex: 0 0 auto; display: inline-block; cursor: pointer; }
+        .mant-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 3; }
+        .mant-pill {
+            position: absolute; inset: 0; border-radius: 40px;
+            background: linear-gradient(180deg, #ffffff 0%, #ececec 100%);
+            box-shadow: 0 6px 0 #cfcfcf, 0 12px 18px rgba(0,0,0,0.18), inset 0 2px 3px #fff;
         }
-        #btn-top { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); }
-
-        /* Pantallas grandes: el contenido crece en vez de quedarse angosto */
-        @media (min-width: 1400px) { :root { --cx: 28px; } .container { max-width: 1160px; } }
-        @media (min-width: 1800px) { html { font-size: 112.5%; } .container { max-width: 1280px; } }
-
-        /* Tipografía fluida: escala suave entre celular, tablet y escritorio */
-        .nombre-logo .n1, .nombre-logo .n2 { font-size: clamp(1.1rem, .8rem + 1.1vw, 1.55rem); }
-        .logo-area p { font-size: clamp(.58rem, .4rem + .7vw, .8rem); }
-        .card-header-flex h2 { font-size: clamp(1.55rem, 1.1rem + 1.8vw, 1.9rem); overflow-wrap: break-word; min-width: 0; }
-        .apartado-titulo { font-size: clamp(1.15rem, 1rem + .8vw, 1.4rem); }
-        .bloque h3 { font-size: clamp(1.15rem, 1rem + .6vw, 1.35rem); }
-        .texto-Dinamico { font-size: clamp(.97rem, .9rem + .3vw, 1.08rem); line-height: 1.75; overflow-wrap: break-word; }
-        .hero-logo { width: clamp(96px, 28vw, 130px); height: clamp(96px, 28vw, 130px); }
-
-        /* Hover solo donde existe mouse: evita "hover pegado" al tocar en celulares */
-        @media (hover: none) {
-            .card:hover, .galeria-publica-card:hover, .evento-mini:hover, .social-contact-card:hover,
-            .horarios-list li:hover, .btn-hero:hover, .btn-dev:hover, .social-icon-btn:hover,
-            .btn-editar-lapiz:hover, .calendar-btn:hover { transform: none; }
-            .galeria-publica-card:hover img { transform: none; }
+        .mant-track {
+            position: absolute; left: 14px; right: 14px; top: 14px; bottom: 14px; border-radius: 30px;
+            background: linear-gradient(180deg, #8d8d8d 0%, #b9b9b9 100%);
+            box-shadow: inset 0 3px 5px rgba(0,0,0,0.25);
+            transition: background 0.3s ease;
         }
-
-        /* Pantallas táctiles: objetivos de toque de al menos 44px */
-        @media (pointer: coarse) {
-            .menu-btn { min-width: 44px; min-height: 44px; }
-            .calendar-btn { width: 44px; height: 44px; }
-            .btn-editar-lapiz { width: 44px; height: 44px; }
-            .barra-seccion button { width: 44px !important; height: 44px !important; }
-            .barra-seccion button.agregar { width: auto !important; }
-            .bloque-ctrl button { width: 40px !important; height: 40px !important; }
-            .btn-modal, .btn-cancelar, .btn-eliminar-seccion, .btn-hero { min-height: 44px; }
-            .opciones-layout button, .opciones-tamano button, .btn-foto { min-height: 44px; }
-            .lb-btn { width: 48px; height: 48px; }
+        .mant-switch input:checked ~ .mant-track { background: linear-gradient(180deg, #00b300 0%, #1fe070 100%); }
+        .mant-knob {
+            position: absolute; top: 5px; left: 6px; width: 48px; height: 48px; border-radius: 50%;
+            background: linear-gradient(145deg, #ffffff 0%, #dcdcdc 100%);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.30), inset 0 2px 2px #fff;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
-        /* Menú desplegable: el botón queda junto al logo (el nombre se ajusta en 2 líneas)
-           y, si el menú no cabe en pantalla, se desplaza por dentro */
-        @media (max-width: 1100px) {
-            .brand-container { flex: 1 1 0; }
-            nav.abierto { max-height: calc(100vh - 110px); max-height: calc(100dvh - 110px); overflow-y: auto; overscroll-behavior: contain; }
-        }
-
-        /* Tablets y celulares */
-        @media (max-width: 768px) {
-            .calendar-app-container { padding: 1rem; gap: 1.2rem; border-radius: 16px; }
-            .calendar-grid { gap: 4px; }
-            .calendar-date { font-size: .92rem; }
-            .calendar-header { margin-bottom: 1rem; }
-            .agenda-panel { min-height: 0; padding: 1.1rem; }
-            .agenda-lista { max-height: none; }
-            .social-contact-card { padding: 1.2rem; gap: 14px; }
-            .social-contact-icon { width: 52px; height: 52px; font-size: 1.5rem; }
-            .bloque { padding: 1.1rem !important; }
-            .btn-hero { padding: .8rem 1.4rem; }
-        }
-
-        .social-contact-info p { word-break: normal; overflow-wrap: anywhere; }
-
-        /* Celulares angostos */
-        @media (max-width: 480px) {
-            .social-contact-card { padding: 1rem; gap: 12px; }
-            .social-contact-icon { width: 46px; height: 46px; }
-            .social-contact-info h3 { font-size: 1.05rem; }
-            .social-contact-info p { font-size: .82rem; }
-            .card { margin-bottom: 1.6rem; }
-            ul.horarios-list li { padding: 12px 14px; font-size: .98rem; }
-            .hero-btns, .botones-ubicacion { flex-direction: column; align-items: stretch; }
-            .bloque-imgs img { max-height: 260px; }
-            .opciones-tamano { flex-wrap: wrap; }
-            .opciones-tamano button { flex: 1 1 40%; }
-            .lb-btn { width: 42px; height: 42px; font-size: 1.2rem; }
-        }
-        @media (max-width: 360px) {
-            .calendar-grid { gap: 2px; }
-            .calendar-day-name { font-size: .64rem; }
-            .calendar-date { font-size: .8rem; }
-            .calendar-app-container { padding: .7rem; }
-            .nombre-logo .n3 { letter-spacing: .16em; }
-        }
-
-        /* Celulares en horizontal (poca altura): el encabezado no tapa el contenido */
-        @media (max-height: 500px) and (orientation: landscape) {
-            header { position: static; }
-            .hero { padding: 1.4rem 1rem; }
-            .container { margin-top: 1rem; }
-            nav.abierto { max-height: none; }
-        }
-
-        /* Ventanas emergentes y visor de imágenes: altura real del viewport móvil */
-        .modal-overlay { height: 100dvh; padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
-        .modal-card { max-height: 90vh; max-height: 90dvh; }
-        #modal-img-ampliada { max-width: 94% !important; max-height: 86vh !important; max-height: 86dvh !important; }
-        .modal-overlay > span { top: calc(10px + env(safe-area-inset-top, 0px)) !important; right: 16px !important; font-size: 38px !important; line-height: 1; padding: 4px 10px; }
-        @media (max-width: 768px) {
-            .lb-btn[style*="left"] { left: 8px !important; }
-            .lb-btn[style*="right"] { right: 8px !important; }
-        }
-
-        /* Campos de fecha/hora: evitan desbordes en iOS/Android */
-        input[type="date"], input[type="time"] { min-width: 0; max-width: 100%; min-height: 48px; }
-
-        /* ---- Panel de administración ---- */
-        /* Botones flotantes: se acomodan en filas en vez de desbordarse */
-        .dev-floating-controls { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: calc(20px + env(safe-area-inset-left, 0px)); }
-        @media (max-width: 768px) {
-            .dev-floating-controls { flex-wrap: wrap; justify-content: center; left: calc(10px + env(safe-area-inset-left, 0px)) !important; right: calc(10px + env(safe-area-inset-right, 0px)) !important; bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important; }
-            .btn-dev { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
-            #btn-top { bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
-            footer { padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px)) !important; }
-        }
-
-        /* Botones de las ventanas emergentes: apilados y a todo el ancho en celular */
-        .modal-card form > div[style*="display: flex"] { flex-wrap: wrap; gap: 10px; }
-        .btn-cancelar { margin-left: 0 !important; }
-        @media (max-width: 480px) {
-            .modal-card form > div[style*="display: flex"] { flex-direction: column !important; align-items: stretch !important; }
-            .modal-card form > div[style*="display: flex"] > div { margin-left: 0 !important; width: 100%; order: 1; }
-            .modal-card form > div[style*="display: flex"] > div > button { flex: 1; }
-            #btn-eliminar-rs { order: 3; }
-            .btn-modal, .btn-cancelar { width: 100%; }
-            .modal-card { padding: 1.2rem; }
-        }
-
-        /* Filas de horarios por día y listas de eventos */
-        .fila-horario .input-dia-horario { flex: 1; min-width: 0; }
-        @media (max-width: 480px) {
-            .fila-horario { flex-wrap: wrap; }
-            .fila-horario .dia-horario { width: 100% !important; }
-        }
-        .card div[style*="justify-content:space-between"] > div:first-child { min-width: 0; overflow-wrap: anywhere; }
-
-        /* Inicio de sesión */
-        #login-overlay { overflow-y: auto; align-items: center; align-items: safe center; }
-        @media (max-width: 360px) { .login-card { padding: 1.6rem 1.2rem; } }
+        .mant-switch input:checked ~ .mant-knob { transform: translateX(50px); }
+        .mant-switch input:disabled { cursor: wait; }
+        .mant-switch input:focus-visible ~ .mant-pill { outline: 3px solid var(--primary-light); outline-offset: 3px; }
     </style>
 </head>
 <body>
@@ -875,6 +753,21 @@
         <button onclick="abrirModalNuevaSeccion()" class="btn-dev">✨ + Crear Sección</button>
         <button onclick="mostrarSeccionAdmin('configuracion-tema', null)" class="btn-dev">⚙️ Estilos</button>
         <button onclick="cerrarSesion()" class="btn-dev">🚪 Salir</button>
+    </div>
+
+
+    <!-- INTERRUPTOR DE MODO MANTENIMIENTO -->
+    <div class="mant-bar" id="mant-bar">
+        <div class="mant-info">
+            <strong>🛠️ Modo mantenimiento del sitio público</strong>
+            <span id="mant-estado">Apagado: el sitio público funciona con normalidad.</span>
+        </div>
+        <label class="mant-switch" title="Activar / desactivar mantenimiento">
+            <input type="checkbox" id="mant-check" role="switch" aria-label="Modo mantenimiento" onchange="alternarMantenimiento(this)">
+            <span class="mant-pill"></span>
+            <span class="mant-track"></span>
+            <span class="mant-knob"></span>
+        </label>
     </div>
 
     <div class="container" id="admin-vistas-container"></div>
@@ -1316,11 +1209,49 @@
             if (sessionStorage.getItem(TOKEN_KEY)) inicializarAdmin(); else mostrarLogin();
         });
 
+
+        // ===== MODO MANTENIMIENTO =====
+        const mantActivo = v => v === true || v === 1 || v === '1' || v === 'true';
+        function pintarMantenimiento(on) {
+            const chk = document.getElementById('mant-check');
+            if (!chk) return;
+            chk.checked = on;
+            document.getElementById('mant-bar').classList.toggle('on', on);
+            document.getElementById('mant-estado').innerText = on
+                ? 'ENCENDIDO: los visitantes ven el aviso de mantenimiento y no pueden navegar.'
+                : 'Apagado: el sitio público funciona con normalidad.';
+        }
+        async function alternarMantenimiento(chk) {
+            const on = chk.checked;
+            if (on && !confirm('¿Activar el modo mantenimiento?\nLos visitantes no podrán navegar el sitio hasta que lo apagues.')) { chk.checked = false; return; }
+            chk.disabled = true;
+            try {
+                const res = await fetch('/api/configuracion', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ modo_mantenimiento: on ? 1 : 0 })
+                });
+                if (!res.ok) throw new Error('http');
+                // Verificar que el servidor realmente guardó el valor
+                const cfg = await (await fetch('/api/configuracion', { cache: 'no-store' })).json();
+                if (mantActivo(cfg.modo_mantenimiento) !== on) throw new Error('no-guardado');
+                cfgGlobal = cfg;
+                pintarMantenimiento(on);
+            } catch (err) {
+                if (err.message !== 'Sesión expirada') {
+                    alert(err.message === 'no-guardado'
+                        ? 'El servidor no guardó la opción «modo_mantenimiento». Hay que agregar ese campo en la configuración del servidor.'
+                        : 'No se pudo cambiar el modo mantenimiento.');
+                }
+                pintarMantenimiento(!on);
+            } finally { chk.disabled = false; }
+        }
+
         async function inicializarAdmin() {
             try {
                 const resConf = await fetch('/api/configuracion');
                 const config = await resConf.json();
                 cfgGlobal = config;
+                pintarMantenimiento(mantActivo(config.modo_mantenimiento));
                 if (config.nombre_iglesia) {
                     document.getElementById('admin-header-titulo').innerHTML = htmlNombre(config.nombre_iglesia);
                     document.getElementById('admin-footer-name').innerText = plainNombre(config.nombre_iglesia);
@@ -1762,7 +1693,7 @@
             try {
                 await fetch('/api/configuracion', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nombre_iglesia, subtitulo_iglesia, color_primary, color_accent, color_red, versiculo_texto, versiculo_cita, pie_texto, texto_btn1, texto_btn2, titulo_proximos, titulo_redes })
+                    body: JSON.stringify({ nombre_iglesia, subtitulo_iglesia, color_primary, color_accent, color_red, versiculo_texto, versiculo_cita, pie_texto, texto_btn1, texto_btn2, titulo_proximos, titulo_redes, modo_mantenimiento: document.getElementById('mant-check').checked ? 1 : 0 })
                 });
 
                 const fileInput = document.getElementById('conf-logo-file');
@@ -1851,8 +1782,8 @@
             diasSemana.forEach(dia => {
                 const val = mapa[dia] || '7:00 PM - 8:30 PM';
                 contenedor.innerHTML += `
-                    <div class="fila-horario" style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
-                        <span class="dia-horario" style="width:140px; font-weight:700;">${esc(dia)}</span>
+                    <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+                        <span style="width:140px; font-weight:700;">${esc(dia)}</span>
                         <input type="text" class="input-dia-horario" data-dia="${dia}" value="${esc(val)}">
                     </div>
                 `;
