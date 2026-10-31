@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f3380">
     <title id="meta-titulo">IDEC Peronia - Iglesia de Dios Evangelio Completo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -529,6 +530,136 @@
             .nombre-logo .n3 { font-size: .62rem; letter-spacing: .24em; }
             .logo-area p { font-size: .6rem; letter-spacing: .1em; }
             .calendar-widget { padding: 1rem; }
+        }
+
+        /* ======================================================================
+           DISEÑO ADAPTABLE (RESPONSIVE WEB DESIGN) — capa de refuerzo
+           Se agrega al final para complementar las reglas existentes:
+           áreas seguras (notch), tipografía fluida, objetivos táctiles de 44px,
+           hover solo con mouse, alturas dinámicas (dvh) y orientación horizontal.
+           ====================================================================== */
+        :root { --hx: 2.5rem; --hy: 1.2rem; --cx: 20px; }
+        @media (max-width: 1100px) { :root { --hx: 1.4rem; --hy: .9rem; } }
+        @media (max-width: 768px)  { :root { --cx: .9rem; } }
+        @media (max-width: 480px)  { :root { --hx: 1rem; --hy: .8rem; } }
+
+        /* Corrección: el pie medía 100% + su relleno (desbordaba y se descentraba) */
+        footer { box-sizing: border-box; }
+
+        /* Áreas seguras: el contenido no queda bajo el notch ni la barra del sistema */
+        header {
+            padding: calc(var(--hy) + env(safe-area-inset-top, 0px)) calc(var(--hx) + env(safe-area-inset-right, 0px)) var(--hy) calc(var(--hx) + env(safe-area-inset-left, 0px));
+            gap: .5rem;
+        }
+        .container {
+            padding-left: calc(var(--cx) + env(safe-area-inset-left, 0px));
+            padding-right: calc(var(--cx) + env(safe-area-inset-right, 0px));
+        }
+        #btn-top { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); }
+
+        /* Pantallas grandes: el contenido crece en vez de quedarse angosto */
+        @media (min-width: 1400px) { :root { --cx: 28px; } .container { max-width: 1160px; } }
+        @media (min-width: 1800px) { html { font-size: 112.5%; } .container { max-width: 1280px; } }
+
+        /* Tipografía fluida: escala suave entre celular, tablet y escritorio */
+        .nombre-logo .n1, .nombre-logo .n2 { font-size: clamp(1.1rem, .8rem + 1.1vw, 1.55rem); }
+        .logo-area p { font-size: clamp(.58rem, .4rem + .7vw, .8rem); }
+        .card-header-flex h2 { font-size: clamp(1.55rem, 1.1rem + 1.8vw, 1.9rem); overflow-wrap: break-word; min-width: 0; }
+        .apartado-titulo { font-size: clamp(1.15rem, 1rem + .8vw, 1.4rem); }
+        .bloque h3 { font-size: clamp(1.15rem, 1rem + .6vw, 1.35rem); }
+        .texto-Dinamico { font-size: clamp(.97rem, .9rem + .3vw, 1.08rem); line-height: 1.75; overflow-wrap: break-word; }
+        .hero-logo { width: clamp(96px, 28vw, 130px); height: clamp(96px, 28vw, 130px); }
+
+        /* Hover solo donde existe mouse: evita "hover pegado" al tocar en celulares */
+        @media (hover: none) {
+            .card:hover, .galeria-publica-card:hover, .evento-mini:hover, .social-contact-card:hover,
+            .horarios-list li:hover, .btn-hero:hover, .btn-dev:hover, .social-icon-btn:hover,
+            .btn-editar-lapiz:hover, .calendar-btn:hover { transform: none; }
+            .galeria-publica-card:hover img { transform: none; }
+        }
+
+        /* Pantallas táctiles: objetivos de toque de al menos 44px */
+        @media (pointer: coarse) {
+            .menu-btn { min-width: 44px; min-height: 44px; }
+            .calendar-btn { width: 44px; height: 44px; }
+            .btn-editar-lapiz { width: 44px; height: 44px; }
+            .barra-seccion button { width: 44px !important; height: 44px !important; }
+            .barra-seccion button.agregar { width: auto !important; }
+            .bloque-ctrl button { width: 40px !important; height: 40px !important; }
+            .btn-modal, .btn-cancelar, .btn-eliminar-seccion, .btn-hero { min-height: 44px; }
+            .opciones-layout button, .opciones-tamano button, .btn-foto { min-height: 44px; }
+            .lb-btn { width: 48px; height: 48px; }
+        }
+
+        /* Menú desplegable: el botón queda junto al logo (el nombre se ajusta en 2 líneas)
+           y, si el menú no cabe en pantalla, se desplaza por dentro */
+        @media (max-width: 1100px) {
+            .brand-container { flex: 1 1 0; }
+            nav.abierto { max-height: calc(100vh - 110px); max-height: calc(100dvh - 110px); overflow-y: auto; overscroll-behavior: contain; }
+        }
+
+        /* Tablets y celulares */
+        @media (max-width: 768px) {
+            .calendar-app-container { padding: 1rem; gap: 1.2rem; border-radius: 16px; }
+            .calendar-grid { gap: 4px; }
+            .calendar-date { font-size: .92rem; }
+            .calendar-header { margin-bottom: 1rem; }
+            .agenda-panel { min-height: 0; padding: 1.1rem; }
+            .agenda-lista { max-height: none; }
+            .social-contact-card { padding: 1.2rem; gap: 14px; }
+            .social-contact-icon { width: 52px; height: 52px; font-size: 1.5rem; }
+            .bloque { padding: 1.1rem !important; }
+            .btn-hero { padding: .8rem 1.4rem; }
+        }
+
+        .social-contact-info p { word-break: normal; overflow-wrap: anywhere; }
+
+        /* Celulares angostos */
+        @media (max-width: 480px) {
+            .social-contact-card { padding: 1rem; gap: 12px; }
+            .social-contact-icon { width: 46px; height: 46px; }
+            .social-contact-info h3 { font-size: 1.05rem; }
+            .social-contact-info p { font-size: .82rem; }
+            .card { margin-bottom: 1.6rem; }
+            ul.horarios-list li { padding: 12px 14px; font-size: .98rem; }
+            .hero-btns, .botones-ubicacion { flex-direction: column; align-items: stretch; }
+            .bloque-imgs img { max-height: 260px; }
+            .opciones-tamano { flex-wrap: wrap; }
+            .opciones-tamano button { flex: 1 1 40%; }
+            .lb-btn { width: 42px; height: 42px; font-size: 1.2rem; }
+        }
+        @media (max-width: 360px) {
+            .calendar-grid { gap: 2px; }
+            .calendar-day-name { font-size: .64rem; }
+            .calendar-date { font-size: .8rem; }
+            .calendar-app-container { padding: .7rem; }
+            .nombre-logo .n3 { letter-spacing: .16em; }
+        }
+
+        /* Celulares en horizontal (poca altura): el encabezado no tapa el contenido */
+        @media (max-height: 500px) and (orientation: landscape) {
+            header { position: static; }
+            .hero { padding: 1.4rem 1rem; }
+            .container { margin-top: 1rem; }
+            nav.abierto { max-height: none; }
+        }
+
+        /* Ventanas emergentes y visor de imágenes: altura real del viewport móvil */
+        .modal-overlay { height: 100dvh; padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+        .modal-card { max-height: 90vh; max-height: 90dvh; }
+        #modal-img-ampliada { max-width: 94% !important; max-height: 86vh !important; max-height: 86dvh !important; }
+        .modal-overlay > span { top: calc(10px + env(safe-area-inset-top, 0px)) !important; right: 16px !important; font-size: 38px !important; line-height: 1; padding: 4px 10px; }
+        @media (max-width: 768px) {
+            .lb-btn[style*="left"] { left: 8px !important; }
+            .lb-btn[style*="right"] { right: 8px !important; }
+        }
+
+        /* Campos de fecha/hora: evitan desbordes en iOS/Android */
+        input[type="date"], input[type="time"] { min-width: 0; max-width: 100%; min-height: 48px; }
+
+        /* Pie del sitio: relleno justo (sin el exceso de 8rem) y respeta el botón "subir" */
+        @media (max-width: 768px) {
+            footer { padding: 1.2rem 1rem calc(4.2rem + env(safe-area-inset-bottom, 0px)) !important; }
         }
     </style>
 </head>
