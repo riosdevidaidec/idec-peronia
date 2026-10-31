@@ -266,6 +266,14 @@
         }
         .btn-editar-lapiz:hover { transform: scale(1.15) rotate(15deg); }
 
+        /* Permisos: lo que la persona no puede usar no se muestra */
+        .btn-fotos-solo { display: none !important; }
+        body.solo-fotos .btn-fotos-solo { display: flex !important; }
+        .perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin: .8rem 0; }
+        .perm-item { display: flex; gap: 10px; align-items: flex-start; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: .92rem; }
+        .perm-item input { width: auto; margin-top: 3px; flex: 0 0 auto; }
+        .perm-item input:disabled + span { opacity: .6; }
+
         .btn-eliminar-seccion {
             background: var(--accent-red);
             color: white;
@@ -858,9 +866,9 @@
 
     <div class="dev-floating-controls">
         <a href="index.html" target="_blank" class="btn-dev">🌐 Ver Sitio Público</a>
-        <button onclick="abrirModalNuevaSeccion()" class="btn-dev">✨ + Crear Sección</button>
-        <button onclick="mostrarSeccionAdmin('configuracion-tema', null)" class="btn-dev">⚙️ Estilos</button>
-        <button onclick="mostrarSeccionAdmin('configuraciones', null)" class="btn-dev">🔧 Configuraciones</button>
+        <button onclick="abrirModalNuevaSeccion()" class="btn-dev" data-perm="secciones">✨ + Crear Sección</button>
+        <button onclick="mostrarSeccionAdmin('configuracion-tema', null)" class="btn-dev" data-perm="admin">⚙️ Estilos</button>
+        <button onclick="mostrarSeccionAdmin('configuraciones', null)" class="btn-dev" data-perm="admin">🔧 Configuraciones</button>
         <button onclick="cerrarSesion()" class="btn-dev">🚪 Salir</button>
     </div>
 
@@ -925,18 +933,25 @@
                 <div class="card-header-flex"><h2>👥 Administradores</h2></div>
                 <div id="cfg-usuarios-lista"><p class="aviso-vacio">Cargando…</p></div>
                 <div class="mant-form" style="margin-top:1.2rem; padding-top:1.2rem; border-top:2px solid #f1f5f9;">
-                    <strong style="color:var(--primary);">Agregar otra persona</strong>
+                    <strong style="color:var(--primary);" id="cfg-user-titulo">Agregar otra persona</strong>
                     <div class="fila">
                         <div><label for="cfg-user-nombre">Usuario:</label><input type="text" id="cfg-user-nombre" autocomplete="off"></div>
                         <div><label for="cfg-user-pass">Contraseña (mín. 8):</label><input type="password" id="cfg-user-pass" autocomplete="new-password"></div>
                     </div>
-                    <div><label for="cfg-user-rol">Permisos:</label>
-                        <select id="cfg-user-rol">
-                            <option value="editor">Editor: textos, avisos y redes sociales</option>
-                            <option value="galeria">Galería: solo subir y borrar fotos</option>
+                    <div><label for="cfg-user-preset">Tipo de acceso (elige uno y ajusta las casillas si quieres):</label>
+                        <select id="cfg-user-preset" onchange="aplicarPresetPermisos()">
+                            <option value="personalizado">Personalizado: yo marco lo que puede hacer</option>
+                            <option value="editor">Editor completo: textos, fotos, cuadros, secciones, calendario y redes</option>
+                            <option value="textos">Solo textos: puede escribir, pero no cambia fotos</option>
+                            <option value="fotos">Solo fotos: puede cambiar fotos, pero no escribe textos</option>
+                            <option value="galeria">Galería: solo subir y borrar fotos y videos de la Galería</option>
                             <option value="admin">Administrador: todo, incluidas estas configuraciones</option>
                         </select></div>
-                    <div class="mant-btns"><button type="button" class="mant-btn" onclick="crearUsuario(this)">Agregar administrador</button></div>
+                    <div id="cfg-permisos-box" class="perm-grid"></div>
+                    <div class="mant-btns">
+                        <button type="button" class="mant-btn" id="cfg-user-btn" onclick="crearUsuario(this)">Agregar administrador</button>
+                        <button type="button" class="mant-btn" id="cfg-user-cancelar" style="display:none; background:#64748b;" onclick="cancelarEdicionUsuario()">Cancelar</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1011,7 +1026,7 @@
             <h3 id="modal-titulo-seccion" style="margin-top: 0; color: var(--primary); font-weight: 800;">Editar Sección</h3>
             <form onsubmit="guardarEdicionSeccion(event)">
                 <input type="hidden" id="modal-seccion-key">
-                <div class="form-group"><label>Título (Nombre visible en el menú):</label><input type="text" id="modal-input-titulo" required></div>
+                <div class="form-group" id="grupo-titulo-ed"><label>Título (Nombre visible en el menú):</label><input type="text" id="modal-input-titulo" required></div>
                 <div class="form-group" id="grupo-texto-normal"><label>Texto / Descripción:</label><textarea id="modal-input-texto" rows="5"></textarea></div>
                 <div id="grupo-horarios-dinamicos" class="hidden">
                     <label style="margin-bottom: 12px;">Horarios de Servicios:</label>
@@ -1110,8 +1125,8 @@
             <h3 id="modal-bloque-titulo" style="margin-top: 0; color: var(--primary); font-weight: 800;">Nuevo cuadro</h3>
             <form onsubmit="guardarBloque(event)">
                 <input type="hidden" id="bl-id"><input type="hidden" id="bl-seccion">
-                <div class="form-group"><label>Título (opcional):</label><input type="text" id="bl-titulo"></div>
-                <div class="form-group"><label>Texto (opcional):</label><textarea id="bl-texto" rows="6"></textarea></div>
+                <div class="form-group" id="bl-grupo-titulo"><label>Título (opcional):</label><input type="text" id="bl-titulo"></div>
+                <div class="form-group" id="bl-grupo-texto"><label>Texto (opcional):</label><textarea id="bl-texto" rows="6"></textarea></div>
                 <div id="ctrl-img-bl"></div>
                 <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
                     <button type="submit" class="btn-modal">Guardar</button>
@@ -1134,6 +1149,51 @@
         // ===== SESIÓN =====
         const TOKEN_KEY = 'idec_admin_token';
         const _fetchOriginal = window.fetch.bind(window);
+
+        // ===== PERMISOS =====
+        const PERMISOS_TODOS = ['textos', 'imagenes', 'cuadros', 'secciones', 'galeria', 'avisos', 'redes', 'ubicacion'];
+        const PRESETS_UI = {
+            editor: ['textos', 'imagenes', 'cuadros', 'secciones', 'avisos', 'redes', 'ubicacion'],
+            textos: ['textos'],
+            fotos: ['imagenes'],
+            galeria: ['galeria']
+        };
+        function rolActual() { return sessionStorage.getItem('idec_rol') || 'admin'; }
+        function puede(p) {
+            if (rolActual() === 'admin') return true;
+            if (p === 'admin') return false;
+            let lista = null;
+            try { lista = JSON.parse(sessionStorage.getItem('idec_permisos') || 'null'); } catch (e) {}
+            if (!Array.isArray(lista)) lista = PRESETS_UI[rolActual()] || [];
+            return lista.includes(p);
+        }
+        // Oculta con CSS todo lo marcado con data-perm="..." que la persona no tiene permitido
+        // (el servidor además lo bloquea, esto solo evita mostrar botones que no sirven)
+        function aplicarPermisosUI() {
+            let st = document.getElementById('perm-css');
+            if (!st) { st = document.createElement('style'); st.id = 'perm-css'; document.head.appendChild(st); }
+            st.textContent = PERMISOS_TODOS.concat('admin').filter(p => !puede(p))
+                .map(p => `[data-perm="${p}"] { display: none !important; }`).join('\n');
+            document.body.classList.toggle('solo-fotos', !puede('textos') && puede('imagenes'));
+        }
+        // Pregunta al servidor qué puede hacer esta sesión (por si el administrador cambió sus permisos)
+        async function refrescarPermisos() {
+            const t = sessionStorage.getItem(TOKEN_KEY);
+            if (!t) return;
+            try {
+                const r = await _fetchOriginal('/api/cuenta', { cache: 'no-store', headers: { Authorization: 'Bearer ' + t } });
+                if (r.status === 401) { sessionStorage.removeItem(TOKEN_KEY); mostrarLogin('Tu sesión expiró. Vuelve a iniciar sesión.'); return; }
+                if (!r.ok) return;
+                const d = await r.json();
+                sessionStorage.setItem('idec_rol', d.rol || 'admin');
+                sessionStorage.setItem('idec_permisos', JSON.stringify(d.permisos || []));
+            } catch (e) { /* sin conexión: se usan los permisos guardados al entrar */ }
+        }
+        // Lápiz para editar textos y, si la persona solo maneja fotos, un botón de fotos en su lugar
+        function btnEditar(sec, titulo) {
+            return `<button class="btn-editar-lapiz" data-perm="textos" onclick="abrirModalEdicion('${sec}')" title="${esc(titulo)}">✏️</button>` +
+                   `<button class="btn-editar-lapiz btn-fotos-solo" onclick="abrirModalEdicion('${sec}')" title="Editar fotos">🖼️</button>`;
+        }
 
         // Añade el token a toda escritura hacia /api y reacciona si la sesión expiró
         window.fetch = async (url, opts = {}) => {
@@ -1175,6 +1235,7 @@
                 sessionStorage.setItem(TOKEN_KEY, data.token);
                 sessionStorage.setItem('idec_usuario', data.usuario || document.getElementById('login-usuario').value.trim());
                 sessionStorage.setItem('idec_rol', data.rol || 'admin');
+                sessionStorage.setItem('idec_permisos', JSON.stringify(data.permisos || []));
                 document.getElementById('login-password').value = '';
                 document.getElementById('login-overlay').classList.add('oculto');
                 inicializarAdmin();
@@ -1331,9 +1392,9 @@
 
         function barraSeccionAdmin(c, i, total) {
             return `<div class="barra-seccion">
-                <button title="Mover esta sección a la izquierda del menú" ${i === 0 ? 'disabled' : ''} onclick="moverSeccion('${c.seccion}', -1)">◀</button>
-                <button title="Mover esta sección a la derecha del menú" ${i === total - 1 ? 'disabled' : ''} onclick="moverSeccion('${c.seccion}', 1)">▶</button>
-                <button class="agregar" title="Agregar un cuadro nuevo" onclick="abrirModalBloque('${c.seccion}')">➕ Cuadro</button></div>`;
+                <button data-perm="secciones" title="Mover esta sección a la izquierda del menú" ${i === 0 ? 'disabled' : ''} onclick="moverSeccion('${c.seccion}', -1)">◀</button>
+                <button data-perm="secciones" title="Mover esta sección a la derecha del menú" ${i === total - 1 ? 'disabled' : ''} onclick="moverSeccion('${c.seccion}', 1)">▶</button>
+                <button class="agregar" data-perm="cuadros" title="Agregar un cuadro nuevo" onclick="abrirModalBloque('${c.seccion}')">➕ Cuadro</button></div>`;
         }
 
         function htmlBloquesAdmin(sec) {
@@ -1341,10 +1402,11 @@
             if (!items.length) return '<p class="aviso-vacio">Aún no hay cuadros adicionales en esta sección. Usa «➕ Agregar cuadro».</p>';
             return `<div class="bloques-grid">${items.map(b => htmlBloque(b, `
                 <div class="bloque-ctrl">
-                    <button title="Mover antes" onclick="moverBloque(${b.id}, -1)">⬆️</button>
-                    <button title="Mover después" onclick="moverBloque(${b.id}, 1)">⬇️</button>
-                    <button title="Editar" onclick="abrirModalBloque('${b.seccion}', ${b.id})">✏️</button>
-                    <button title="Eliminar" onclick="eliminarBloque(${b.id})">🗑️</button>
+                    <button data-perm="cuadros" title="Mover antes" onclick="moverBloque(${b.id}, -1)">⬆️</button>
+                    <button data-perm="cuadros" title="Mover después" onclick="moverBloque(${b.id}, 1)">⬇️</button>
+                    <button data-perm="textos" title="Editar" onclick="abrirModalBloque('${b.seccion}', ${b.id})">✏️</button>
+                    <button class="btn-fotos-solo" title="Editar fotos" onclick="abrirModalBloque('${b.seccion}', ${b.id})">🖼️</button>
+                    <button data-perm="cuadros" title="Eliminar" onclick="eliminarBloque(${b.id})">🗑️</button>
                 </div>`)).join('')}</div>`;
         }
 
@@ -1416,6 +1478,11 @@
             document.getElementById('bl-texto').value = b ? b.contenido : '';
             document.getElementById('modal-bloque-titulo').innerText = b ? 'Editar cuadro' : 'Nuevo cuadro';
             cargarImg('bl', b ? parseImgs(b.imagenes) : [], b ? b.layout : 'arriba', b ? b.tamano : 'mediano');
+            const verTexto = puede('textos'), verImg = puede('imagenes');
+            document.getElementById('bl-grupo-titulo').classList.toggle('hidden', !verTexto);
+            document.getElementById('bl-grupo-texto').classList.toggle('hidden', !verTexto);
+            document.getElementById('ctrl-img-bl').classList.toggle('hidden', !verImg);
+            if (!verTexto && b) document.getElementById('modal-bloque-titulo').innerText = 'Fotos del cuadro';
             document.getElementById('modal-bloque').style.display = 'flex';
         }
 
@@ -1426,7 +1493,7 @@
             fd.append('seccion', document.getElementById('bl-seccion').value);
             fd.append('subtitulo', document.getElementById('bl-titulo').value);
             fd.append('contenido', document.getElementById('bl-texto').value);
-            adjuntarImg(fd, 'bl');
+            if (puede('imagenes')) adjuntarImg(fd, 'bl');
             const ok = await accionAdmin(id ? `/api/apartados/${id}` : '/api/apartados', { method: id ? 'PUT' : 'POST', body: fd }, 'No se pudo guardar el cuadro');
             if (ok) cerrarModal('modal-bloque');
         }
@@ -1519,31 +1586,112 @@
             finally { btn.disabled = false; }
         }
 
-        const ROLES = { admin: 'Administrador', editor: 'Editor', galeria: 'Galería' };
+        const ROLES = { admin: 'Administrador', editor: 'Editor', galeria: 'Galería', personalizado: 'Personalizado' };
+        const PERM_INFO = {
+            textos:    { corto: 'Textos',     largo: '✏️ Editar títulos y textos (secciones y cuadros)' },
+            imagenes:  { corto: 'Fotos',      largo: '🖼️ Agregar, quitar y acomodar fotos de secciones y cuadros' },
+            cuadros:   { corto: 'Cuadros',    largo: '➕ Crear, borrar y mover cuadros' },
+            secciones: { corto: 'Secciones',  largo: '🗂️ Crear, borrar y mover secciones del menú' },
+            galeria:   { corto: 'Galería',    largo: '📷 Subir y borrar fotos y videos de la Galería' },
+            avisos:    { corto: 'Calendario', largo: '📅 Crear, editar y borrar eventos del calendario' },
+            redes:     { corto: 'Redes',      largo: '🔗 Redes sociales' },
+            ubicacion: { corto: 'Ubicación',  largo: '📍 Ubicación (mapa y enlace de Google Maps)' }
+        };
+        let cfgUsuarios = [];
+        let cfgEditandoId = null;
+
+        function pintarCheckboxesPermisos() {
+            const box = document.getElementById('cfg-permisos-box');
+            if (!box || box.dataset.listo) return;
+            box.dataset.listo = '1';
+            box.innerHTML = PERMISOS_TODOS.map(k =>
+                `<label class="perm-item"><input type="checkbox" data-pk="${k}" onchange="permisoManual()"><span>${PERM_INFO[k].largo}</span></label>`).join('');
+        }
+        function permisosMarcados() {
+            return [...document.querySelectorAll('#cfg-permisos-box input[data-pk]')].filter(i => i.checked).map(i => i.dataset.pk);
+        }
+        function marcarPermisos(lista, bloquear) {
+            document.querySelectorAll('#cfg-permisos-box input[data-pk]').forEach(i => { i.checked = lista.includes(i.dataset.pk); i.disabled = !!bloquear; });
+        }
+        function aplicarPresetPermisos() {
+            const p = document.getElementById('cfg-user-preset').value;
+            if (p === 'admin') marcarPermisos(PERMISOS_TODOS, true);
+            else if (p === 'personalizado') marcarPermisos(permisosMarcados(), false);
+            else marcarPermisos(PRESETS_UI[p] || [], false);
+        }
+        function permisoManual() { document.getElementById('cfg-user-preset').value = 'personalizado'; }
+
+        function resumenPermisos(u) {
+            if (u.rol === 'admin') return 'Administrador (todo)';
+            const t = (u.permisos || []).map(k => PERM_INFO[k] && PERM_INFO[k].corto).filter(Boolean);
+            return t.length ? t.join(', ') : 'Sin permisos';
+        }
+
         async function cargarUsuarios() {
             const box = document.getElementById('cfg-usuarios-lista');
             if (!box) return;
+            pintarCheckboxesPermisos();
             try {
                 const r = await fetchAuth('/api/usuarios', { cache: 'no-store' });
                 if (r.status === 404 || r.status === 405) { box.innerHTML = msgNoServidor('varios administradores'); return; }
                 if (!r.ok) { box.innerHTML = '<p class="aviso-vacio">No tienes permiso para ver los administradores.</p>'; return; }
                 const lista = await r.json();
-                box.innerHTML = '<div class="cfg-tabla-wrap"><table class="cfg-tabla"><tr><th>Usuario</th><th>Permisos</th><th></th></tr>' +
-                    lista.map(u => `<tr><td>${esc(u.usuario)}</td><td>${esc(ROLES[u.rol] || u.rol || '—')}</td><td><button class="cfg-peligro" onclick="eliminarUsuario(${Number(u.id)}, '${esc(u.usuario).replace(/'/g, '')}')">Quitar</button></td></tr>`).join('') +
+                cfgUsuarios = lista;
+                box.innerHTML = '<div class="cfg-tabla-wrap"><table class="cfg-tabla"><tr><th>Usuario</th><th>Puede hacer</th><th></th></tr>' +
+                    lista.map(u => `<tr><td>${esc(u.usuario)}</td><td>${esc(resumenPermisos(u))}</td><td style="white-space:nowrap;">` +
+                        `<button class="mant-btn" style="padding:6px 12px; font-size:.8rem; margin-right:6px;" onclick="editarPermisosUsuario(${Number(u.id)})">Permisos</button>` +
+                        `<button class="cfg-peligro" onclick="eliminarUsuario(${Number(u.id)}, '${esc(u.usuario).replace(/'/g, '')}')">Quitar</button></td></tr>`).join('') +
                     '</table></div>';
             } catch (e) { box.innerHTML = '<p class="aviso-vacio">No se pudo cargar la lista.</p>'; }
         }
+
+        function editarPermisosUsuario(id) {
+            const u = cfgUsuarios.find(x => x.id === id);
+            if (!u) return;
+            cfgEditandoId = id;
+            document.getElementById('cfg-user-titulo').innerText = `Cambiar los permisos de «${u.usuario}»`;
+            const nom = document.getElementById('cfg-user-nombre');
+            nom.value = u.usuario; nom.readOnly = true;
+            const pass = document.getElementById('cfg-user-pass');
+            pass.value = ''; pass.disabled = true; pass.placeholder = 'No se cambia aquí';
+            if (u.rol === 'admin') { document.getElementById('cfg-user-preset').value = 'admin'; marcarPermisos(PERMISOS_TODOS, true); }
+            else { document.getElementById('cfg-user-preset').value = 'personalizado'; marcarPermisos(u.permisos || [], false); }
+            document.getElementById('cfg-user-btn').innerText = 'Guardar permisos';
+            document.getElementById('cfg-user-cancelar').style.display = '';
+            document.getElementById('cfg-user-titulo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        function cancelarEdicionUsuario() {
+            cfgEditandoId = null;
+            document.getElementById('cfg-user-titulo').innerText = 'Agregar otra persona';
+            const nom = document.getElementById('cfg-user-nombre');
+            nom.value = ''; nom.readOnly = false;
+            const pass = document.getElementById('cfg-user-pass');
+            pass.value = ''; pass.disabled = false; pass.placeholder = '';
+            document.getElementById('cfg-user-preset').value = 'personalizado';
+            marcarPermisos([], false);
+            document.getElementById('cfg-user-btn').innerText = 'Agregar administrador';
+            document.getElementById('cfg-user-cancelar').style.display = 'none';
+        }
+
         async function crearUsuario(btn) {
+            const esAdmin = document.getElementById('cfg-user-preset').value === 'admin';
+            const rol = esAdmin ? 'admin' : 'personalizado';
+            const permisos = esAdmin ? PERMISOS_TODOS.slice() : permisosMarcados();
+            if (!esAdmin && !permisos.length) { alert('Marca al menos una cosa que esta persona pueda hacer.'); return; }
+
+            const editando = cfgEditandoId !== null;
             const usuario = document.getElementById('cfg-user-nombre').value.trim();
             const password = document.getElementById('cfg-user-pass').value;
-            const rol = document.getElementById('cfg-user-rol').value;
-            if (!usuario || password.length < 8) { alert('Escribe el usuario y una contraseña de al menos 8 caracteres.'); return; }
+            if (!editando && (!usuario || password.length < 8)) { alert('Escribe el usuario y una contraseña de al menos 8 caracteres.'); return; }
+
             btn.disabled = true;
             try {
-                const r = await fetch('/api/usuarios', { method: 'POST', headers: JSON_H, body: JSON.stringify({ usuario, password, rol }) });
-                if (r.status === 404) { alert('Tu servidor todavía no tiene esta función (ver ENDPOINTS_SERVIDOR.md).'); return; }
-                if (!r.ok) { let m = 'No se pudo agregar.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
-                document.getElementById('cfg-user-nombre').value = ''; document.getElementById('cfg-user-pass').value = '';
+                const r = editando
+                    ? await fetch('/api/usuarios/' + cfgEditandoId, { method: 'PUT', headers: JSON_H, body: JSON.stringify({ rol, permisos }) })
+                    : await fetch('/api/usuarios', { method: 'POST', headers: JSON_H, body: JSON.stringify({ usuario, password, rol, permisos }) });
+                if (r.status === 404 && !editando) { alert('Tu servidor todavía no tiene esta función (ver ENDPOINTS_SERVIDOR.md).'); return; }
+                if (!r.ok) { let m = editando ? 'No se pudieron guardar los permisos.' : 'No se pudo agregar.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
+                cancelarEdicionUsuario();
                 cargarUsuarios();
             } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión.'); }
             finally { btn.disabled = false; }
@@ -1553,6 +1701,7 @@
             try {
                 const r = await fetch('/api/usuarios/' + id, { method: 'DELETE' });
                 if (!r.ok) { let m = 'No se pudo quitar.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
+                if (cfgEditandoId === id) cancelarEdicionUsuario();
                 cargarUsuarios();
             } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión.'); }
         }
@@ -1787,6 +1936,8 @@
 
         async function inicializarAdmin() {
             try {
+                await refrescarPermisos();
+                aplicarPermisosUI();
                 const resConf = await fetch('/api/configuracion');
                 const config = await resConf.json();
                 cfgGlobal = config;
@@ -1833,7 +1984,7 @@
 
                     let botonEliminarSeccion = '';
                     if (!['inicio', 'horarios', 'calendario', 'galeria', 'contacto', 'ubicacion'].includes(c.seccion)) {
-                        botonEliminarSeccion = `<button onclick="eliminarSeccion('${c.seccion}')" class="btn-eliminar-seccion" style="margin-left: 10px;">🗑️ Eliminar Sección</button>`;
+                        botonEliminarSeccion = `<button onclick="eliminarSeccion('${c.seccion}')" class="btn-eliminar-seccion" data-perm="secciones" style="margin-left: 10px;">🗑️ Eliminar Sección</button>`;
                     }
 
                     if (c.seccion === 'horarios') {
@@ -1842,7 +1993,7 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('horarios')" title="Editar Horarios">✏️</button>
+                                        ${btnEditar('horarios', 'Editar Horarios')}
                                         ${botonEliminarSeccion}
                                     </div>
                                 </div>
@@ -1856,8 +2007,8 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; gap: 10px; align-items: center;">
-                                        <button class="btn-modal" onclick="abrirModalEvento()" style="padding: 8px 16px; font-size: 0.9rem;">+ Nuevo Evento</button>
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('calendario')" title="Editar Calendario">✏️</button>
+                                        <button class="btn-modal" data-perm="avisos" onclick="abrirModalEvento()" style="padding: 8px 16px; font-size: 0.9rem;">+ Nuevo Evento</button>
+                                        ${btnEditar('calendario', 'Editar Calendario')}
                                         ${botonEliminarSeccion}
                                     </div>
                                 </div>
@@ -1891,12 +2042,12 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('galeria')" title="Editar Galería">✏️</button>
+                                        ${btnEditar('galeria', 'Editar Galería')}
                                         ${botonEliminarSeccion}
                                     </div>
                                 </div>
                                 <p class="texto-Dinamico" style="margin-bottom: 1.5rem;">${esc(c.texto)}</p>
-                                <div style="background: #f8fafc; padding: 1.8rem; border-radius: 16px; margin-bottom: 2rem; border: 2px dashed var(--accent);">
+                                <div data-perm="galeria" style="background: #f8fafc; padding: 1.8rem; border-radius: 16px; margin-bottom: 2rem; border: 2px dashed var(--accent);">
                                     <h3 style="margin-top: 0; color: var(--primary); font-size: 1.1rem;">🛠️ Subir Archivos Multimedia</h3>
                                     <form onsubmit="subirMultimediaAdmin(event)" style="display: flex; gap: 12px; flex-wrap: wrap;">
                                         <input type="text" id="admin-media-titulo" placeholder="Categoría (Ej. Campaña)" required style="flex: 1; min-width: 200px;">
@@ -1909,11 +2060,11 @@
                         `;
                         cargarGaleriaAdmin();
                     } else if (c.seccion === 'inicio') {
-                        divSeccion.innerHTML = htmlHero(config).replace('<div class="hero">', '<div class="hero"><button class="btn-editar-lapiz" style="position:absolute; top:16px; right:16px; z-index:2;" onclick="mostrarSeccionAdmin(\'configuracion-tema\')" title="Editar versículo, nombre, logo y colores">✏️</button>') + `
+                        divSeccion.innerHTML = htmlHero(config).replace('<div class="hero">', '<div class="hero"><button class="btn-editar-lapiz" data-perm="admin" style="position:absolute; top:16px; right:16px; z-index:2;" onclick="mostrarSeccionAdmin(\'configuracion-tema\')" title="Editar versículo, nombre, logo y colores">✏️</button>') + `
                             <div class="card">
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
-                                    <button class="btn-editar-lapiz" onclick="abrirModalEdicion('inicio')" title="Editar Sección">✏️</button>
+                                    ${btnEditar('inicio', 'Editar Sección')}
                                 </div>
                                 <p class="texto-Dinamico">${esc(c.texto)}</p>
                             </div>` + htmlProximos();
@@ -1923,11 +2074,11 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('ubicacion')" title="Editar texto">✏️</button>
+                                        ${btnEditar('ubicacion', 'Editar texto')}
                                     </div>
                                 </div>
                                 <p class="texto-Dinamico" style="margin-bottom: 1.5rem;">${esc(c.texto)}</p>
-                                <form onsubmit="guardarUbicacion(event)" style="background: #f8fafc; padding: 1.5rem; border-radius: 16px; border: 2px dashed var(--accent); margin-bottom: 1.5rem;">
+                                <form data-perm="ubicacion" onsubmit="guardarUbicacion(event)" style="background: #f8fafc; padding: 1.5rem; border-radius: 16px; border: 2px dashed var(--accent); margin-bottom: 1.5rem;">
                                     <div class="form-group"><label>Dirección o nombre del lugar (para el mapa):</label><input type="text" id="ub-direccion" required value="${esc(config.mapa_direccion || '')}"></div>
                                     <div class="form-group"><label>Enlace de Google Maps (botón "Abrir en Google Maps"):</label><input type="text" id="ub-url" placeholder="https://maps.app.goo.gl/..." value="${esc(config.ubicacion_url || '')}"></div>
                                     <button type="submit" class="btn-modal">Guardar ubicación</button>
@@ -1941,8 +2092,8 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn-modal" onclick="abrirModalRedSocial()" style="padding: 8px 16px; font-size: 0.9rem;">+ Agregar Red</button>
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('contacto')" title="Editar Contacto">✏️</button>
+                                        <button class="btn-modal" data-perm="redes" onclick="abrirModalRedSocial()" style="padding: 8px 16px; font-size: 0.9rem;">+ Agregar Red</button>
+                                        ${btnEditar('contacto', 'Editar Contacto')}
                                         ${botonEliminarSeccion}
                                     </div>
                                 </div>
@@ -1960,7 +2111,7 @@
                                 <div class="card-header-flex">
                                     <h2>${esc(c.titulo)}</h2>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn-editar-lapiz" onclick="abrirModalEdicion('${c.seccion}')" title="Editar Sección">✏️</button>
+                                        ${btnEditar(c.seccion, 'Editar Sección')}
                                         ${botonEliminarSeccion}
                                     </div>
                                 </div>
@@ -2064,13 +2215,14 @@
                         <div class="social-contact-info" style="flex:1;">
                             <h3>${esc(rs.nombre)}</h3>
                             <p>${esc(rs.url)}</p>
-                            <span style="font-size:0.75rem; color:var(--accent-red); font-weight:700;">✏️ Clic para editar enlace</span>
+                            <span data-perm="redes" style="font-size:0.75rem; color:var(--accent-red); font-weight:700;">✏️ Clic para editar enlace</span>
                         </div>
                     </div>`;
             }).join('');
         }
 
         function abrirModalRedSocial(index = null) {
+            if (!puede('redes')) return;
             document.getElementById('rs-index').value = index !== null ? index : '';
             if (index !== null) {
                 const rs = redesSocialesCache[index];
@@ -2313,6 +2465,16 @@
                 inputTexto.value = item.texto;
             }
             cargarImg('ed', parseImgs(item.imagenes), item.layout, item.tamano);
+            const verTexto = puede('textos'), verImg = puede('imagenes');
+            document.getElementById('grupo-titulo-ed').classList.toggle('hidden', !verTexto);
+            document.getElementById('modal-input-titulo').required = verTexto;
+            if (!verTexto) {
+                grupoNormal.classList.add('hidden');
+                grupoHorarios.classList.add('hidden');
+                inputTexto.removeAttribute('required');
+                document.getElementById('modal-titulo-seccion').innerText = `Fotos de la sección: ${item.titulo}`;
+            }
+            document.getElementById('ctrl-img-ed').classList.toggle('hidden', !verImg);
             document.getElementById('modal-edicion').style.display = 'flex';
         }
 
@@ -2351,7 +2513,7 @@
                 const fd = new FormData();
                 fd.append('titulo', titulo);
                 fd.append('texto', texto);
-                adjuntarImg(fd, 'ed');
+                if (puede('imagenes')) adjuntarImg(fd, 'ed');
                 const res = await fetch(`/api/contenido/${seccion}`, { method: 'PUT', body: fd });
                 if (res.ok) { cerrarModal('modal-edicion'); inicializarAdmin(); }
                 else { let m = 'No se pudo guardar'; try { m = (await res.json()).error || m; } catch (x) {} alert(m); }
@@ -2483,8 +2645,8 @@
                             <div style="color:#64748b; font-size:.85rem; margin-top:3px;">${ini === fin ? ini : ini + ' al ' + fin}${hora}</div>
                         </div>
                         <div style="display:flex; gap:8px;">
-                            <button onclick="abrirModalEventoPorId(${e.id})" class="btn-modal" style="width:34px;height:34px;padding:0;">✏️</button>
-                            <button onclick="eliminarEventoAdmin(${e.id})" class="btn-eliminar-seccion" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;">🗑️</button>
+                            <button data-perm="avisos" onclick="abrirModalEventoPorId(${e.id})" class="btn-modal" style="width:34px;height:34px;padding:0;">✏️</button>
+                            <button data-perm="avisos" onclick="eliminarEventoAdmin(${e.id})" class="btn-eliminar-seccion" style="width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;">🗑️</button>
                         </div>
                     </div>`;
             }).join('');
@@ -2516,8 +2678,8 @@
                             <small style="color:var(--accent-red); font-weight:700;">${esc(rango)} ${horaT ? ' | ' + horaT : ''}</small>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:6px;">
-                            <button onclick="abrirModalEventoPorId(${e.id})" class="btn-modal" style="width:30px;height:30px;padding:0;">✏️</button>
-                            <button onclick="eliminarEventoAdmin(${e.id})" class="btn-eliminar-seccion" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;">🗑️</button>
+                            <button data-perm="avisos" onclick="abrirModalEventoPorId(${e.id})" class="btn-modal" style="width:30px;height:30px;padding:0;">✏️</button>
+                            <button data-perm="avisos" onclick="eliminarEventoAdmin(${e.id})" class="btn-eliminar-seccion" style="width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;">🗑️</button>
                         </div>
                     </div>
                 `;
@@ -2558,7 +2720,7 @@
                         cards += `
                             <div class="galeria-publica-card">
                                 ${elem}
-                                <button onclick="eliminarMultimedia(${i.id})" class="btn-eliminar-seccion" style="position:absolute; top:10px; right:10px; z-index: 10;">🗑️</button>
+                                <button data-perm="galeria" onclick="eliminarMultimedia(${i.id})" class="btn-eliminar-seccion" style="position:absolute; top:10px; right:10px; z-index: 10;">🗑️</button>
                             </div>
                         `;
                     });
