@@ -101,18 +101,71 @@ function verificarPassword(plain, guardada) {
 const SESION_HORAS = 12;
 const sesiones = new Map();
 
-function crearSesion() {
+function crearSesion(user) {
     const token = crypto.randomBytes(32).toString('hex');
-    sesiones.set(token, Date.now() + SESION_HORAS * 3600 * 1000);
+    sesiones.set(token, { exp: Date.now() + SESION_HORAS * 3600 * 1000, id: user.id, usuario: user.usuario, rol: user.rol || 'admin' });
     return token;
 }
 
 function sesionValida(token) {
-    const exp = sesiones.get(token);
-    if (!exp) return false;
-    if (exp < Date.now()) { sesiones.delete(token); return false; }
+    const ses = sesiones.get(token);
+    if (!ses) return false;
+    if (ses.exp < Date.now()) { sesiones.delete(token); return false; }
     return true;
 }
+
+function tokenDe(req) { return (req.headers.authorization || '').replace(/^Bearer\s+/i, ''); }
+function sesionDe(req) { const t = tokenDe(req); return sesionValida(t) ? sesiones.get(t) : null; }
+function cerrarSesionesDe(idUsuario, exceptoToken) {
+    for (const [t, ses] of sesiones) if (ses.id === idUsuario && t !== exceptoToken) sesiones.delete(t);
+}
+
+// Permisos por rol: admin = todo; editor = textos, cuadros, avisos y redes; galeria = solo galería
+const ROLES_VALIDOS = ['admin', 'editor', 'galeria'];
+function rutaEn(p, base) { return p === base || p.startsWith(base + '/'); }
+function permitido(ses, metodo, p, body) {
+    if (ses.rol === 'admin') return true;
+    if (p === '/logout' || p === '/cuenta/password') return true;
+    if (ses.rol === 'galeria') return rutaEn(p, '/galeria');
+    if (ses.rol === 'editor') {
+        if (['/contenido', '/apartados', '/avisos', '/redes-sociales'].some(b => rutaEn(p, b))) return true;
+        // El editor solo puede guardar la ubicación del mapa dentro de la configuración
+        if (p === '/configuracion' && metodo === 'PUT') {
+            const claves = Object.keys(body || {});
+            return claves.length > 0 && claves.every(k => ['mapa_direccion', 'ubicacion_url'].includes(k));
+        }
+    }
+    return false;
+}
+
+// Texto legible para el historial de cambios
+function describirAccion(metodo, p) {
+    const partes = p.replace(/^\//, '').split('/');
+    const nombres = { configuracion: 'la configuración', contenido: 'una sección', apartados: 'un cuadro', avisos: 'un aviso del calendario', 'redes-sociales': 'una red social', galeria: 'un elemento de la galería', usuarios: 'un administrador', cuenta: 'su contraseña' };
+    if (partes[1] === 'logo') return 'Cambió el logo';
+    if (partes[0] === 'cuenta') return 'Cambió su contraseña';
+    const recurso = nombres[partes[0]] || partes[0];
+    if (partes[partes.length - 1] === 'mover') return `Movió ${recurso}`;
+    const verbo = { POST: 'Agregó', PUT: 'Modificó', PATCH: 'Modificó', DELETE: 'Eliminó' }[metodo] || metodo;
+    const detalle = partes[0] === 'contenido' && partes[1] ? ` («${partes[1]}»)` : '';
+    return `${verbo} ${recurso}${detalle}`;
+}
+
+// Fecha local (por defecto Guatemala, UTC-6; se puede cambiar con TZ_OFFSET_HORAS)
+const TZ_OFFSET_HORAS = Number(process.env.TZ_OFFSET_HORAS ?? -6);
+function fechaLocal(offsetDias = 0) {
+    return new Date(Date.now() + TZ_OFFSET_HORAS * 3600 * 1000 + offsetDias * 86400 * 1000).toISOString().slice(0, 10);
+}
+
+const visitasPorIp = new Map();
+function visitaLimitada(ip) {
+    const ahora = Date.now();
+    const r = visitasPorIp.get(ip);
+    if (!r || ahora - r.desde > 60000) { visitasPorIp.set(ip, { n: 1, desde: ahora }); return false; }
+    r.n++;
+    return r.n > 30;
+}
+setInterval(() => { const l = Date.now() - 60000; for (const [ip, r] of visitasPorIp) if (r.desde < l) visitasPorIp.delete(ip); }, 60000);
 
 const intentosLogin = new Map();
 function loginBloqueado(ip) {
@@ -155,12 +208,20 @@ app.get('/api/eventos', (req, res) => {
 app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (req.method === 'GET' || req.method === 'HEAD' || req.path === '/login') return next();
+    if (req.path === '/visitas' && req.method === 'POST') return next(); // público y anónimo
 
-    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!sesionValida(token)) return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+    const ses = sesionDe(req);
+    if (!ses) return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+    if (!permitido(ses, req.method, req.path, req.body)) return res.status(403).json({ error: 'No tienes permiso para hacer esto.' });
+    req.sesion = ses;
 
     if (req.path === '/logout') return next();
-    res.on('finish', () => { if (res.statusCode < 400) notificarCambio(); });
+    res.on('finish', () => {
+        if (res.statusCode >= 400) return;
+        notificarCambio();
+        if (db) db.run('INSERT INTO historial (fecha, usuario, accion) VALUES (?, ?, ?)', [new Date().toISOString(), ses.usuario, describirAccion(req.method, req.path)])
+            .then(() => db.run('DELETE FROM historial WHERE id <= (SELECT MAX(id) FROM historial) - 1000')).catch(() => {});
+    });
     next();
 });
 
@@ -229,7 +290,21 @@ async function iniciarBD() {
             nombre TEXT NOT NULL,
             url TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS visitas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            seccion TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_visitas_fecha ON visitas (fecha);
+        CREATE TABLE IF NOT EXISTS historial (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha TEXT NOT NULL,
+            usuario TEXT NOT NULL,
+            accion TEXT NOT NULL
+        );
     `);
+    try { await db.exec(`ALTER TABLE usuarios ADD COLUMN rol TEXT DEFAULT 'admin';`); } catch (e) {}
 
     const totalUsuarios = await db.get('SELECT COUNT(*) AS n FROM usuarios');
     if (totalUsuarios.n === 0) {
@@ -359,7 +434,7 @@ app.post('/api/login', async (req, res) => {
                 await db.run('UPDATE usuarios SET password = ? WHERE id = ?', [hashPassword(String(password).trim()), user.id]);
             }
             intentosLogin.delete(ip);
-            res.json({ success: true, token: crearSesion(), message: 'Bienvenido' });
+            res.json({ success: true, token: crearSesion(user), usuario: user.usuario, rol: user.rol || 'admin', message: 'Bienvenido' });
         } else {
             registrarFallo(ip);
             res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
@@ -370,7 +445,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const token = tokenDe(req);
     sesiones.delete(token);
     res.json({ success: true });
 });
@@ -663,6 +738,99 @@ app.delete('/api/galeria/:id', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
+});
+
+// ============================================================
+//  CUENTA, ADMINISTRADORES, VISITAS E HISTORIAL
+// ============================================================
+function soloAdmin(req, res) {
+    const ses = sesionDe(req);
+    if (!ses) { res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' }); return null; }
+    if (ses.rol !== 'admin') { res.status(403).json({ error: 'Solo un administrador puede ver esto.' }); return null; }
+    return ses;
+}
+
+app.post('/api/cuenta/password', async (req, res) => {
+    try {
+        const ses = req.sesion;
+        const { actual, nueva } = req.body || {};
+        if (!actual || !nueva) return res.status(400).json({ error: 'Faltan datos.' });
+        if (String(nueva).length < 8) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres.' });
+        const user = await db.get('SELECT * FROM usuarios WHERE id = ?', [ses.id]);
+        if (!user || !verificarPassword(String(actual).trim(), user.password)) return res.status(403).json({ error: 'La contraseña actual no es correcta.' });
+        await db.run('UPDATE usuarios SET password = ? WHERE id = ?', [hashPassword(String(nueva).trim()), user.id]);
+        cerrarSesionesDe(user.id, tokenDe(req)); // cierra las demás sesiones de esta cuenta
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/usuarios', async (req, res) => {
+    if (!soloAdmin(req, res)) return;
+    try { res.json(await db.all("SELECT id, usuario, COALESCE(rol, 'admin') AS rol FROM usuarios ORDER BY id ASC")); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/usuarios', async (req, res) => {
+    try {
+        const { usuario, password, rol } = req.body || {};
+        const nombre = String(usuario || '').trim();
+        if (!nombre || nombre.length > 40) return res.status(400).json({ error: 'Escribe un nombre de usuario (máximo 40 caracteres).' });
+        if (String(password || '').length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+        if (!ROLES_VALIDOS.includes(rol)) return res.status(400).json({ error: 'Permisos no válidos.' });
+        const existe = await db.get('SELECT id FROM usuarios WHERE usuario = ?', [nombre]);
+        if (existe) return res.status(400).json({ error: 'Ese usuario ya existe.' });
+        await db.run('INSERT INTO usuarios (usuario, password, rol) VALUES (?, ?, ?)', [nombre, hashPassword(String(password).trim()), rol]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/usuarios/:id', async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (id === req.sesion.id) return res.status(400).json({ error: 'No puedes quitarte el acceso a ti mismo.' });
+        const user = await db.get("SELECT id, COALESCE(rol, 'admin') AS rol FROM usuarios WHERE id = ?", [id]);
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        if (user.rol === 'admin') {
+            const n = await db.get("SELECT COUNT(*) AS n FROM usuarios WHERE COALESCE(rol, 'admin') = 'admin'");
+            if (n.n <= 1) return res.status(400).json({ error: 'No se puede quitar al último administrador.' });
+        }
+        await db.run('DELETE FROM usuarios WHERE id = ?', [id]);
+        cerrarSesionesDe(id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Contador de visitas anónimo (no guarda IP ni datos personales)
+app.post('/api/visitas', async (req, res) => {
+    try {
+        if (visitaLimitada(req.ip)) return res.status(429).json({ error: 'Demasiadas solicitudes' });
+        const { tipo, seccion } = req.body || {};
+        if (!['visita', 'seccion'].includes(tipo)) return res.status(400).json({ error: 'Tipo no válido' });
+        const sec = typeof seccion === 'string' && /^[a-z0-9-]{1,60}$/.test(seccion) ? seccion : null;
+        await db.run('INSERT INTO visitas (fecha, tipo, seccion) VALUES (?, ?, ?)', [fechaLocal(), tipo, sec]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/visitas', async (req, res) => {
+    if (!soloAdmin(req, res)) return;
+    try {
+        const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 7, 1), 365);
+        const desde = fechaLocal(-(dias - 1));
+        const filas = await db.all("SELECT fecha, COUNT(*) AS n FROM visitas WHERE tipo = 'visita' AND fecha >= ? GROUP BY fecha", [desde]);
+        const mapa = Object.fromEntries(filas.map(f => [f.fecha, f.n]));
+        const por_dia = [];
+        for (let k = dias - 1; k >= 0; k--) { const f = fechaLocal(-k); por_dia.push({ fecha: f, visitas: mapa[f] || 0 }); }
+        const por_seccion = (await db.all("SELECT COALESCE(seccion, '') AS seccion, COUNT(*) AS visitas FROM visitas WHERE tipo = 'seccion' AND fecha >= ? GROUP BY seccion ORDER BY visitas DESC LIMIT 10", [desde]));
+        res.json({ total: por_dia.reduce((a, d) => a + d.visitas, 0), por_dia, por_seccion });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Historial de cambios (se registra solo, en el middleware de /api)
+app.get('/api/historial', async (req, res) => {
+    if (!soloAdmin(req, res)) return;
+    try { res.json(await db.all('SELECT fecha, usuario, accion FROM historial ORDER BY id DESC LIMIT 200')); }
+    catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 3000;
