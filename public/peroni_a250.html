@@ -999,11 +999,11 @@
         <div class="cfg-pane" id="cfg-respaldo">
             <div class="card">
                 <div class="card-header-flex"><h2>💾 Respaldo y restauración</h2></div>
-                <p class="texto-Dinamico">Descarga una copia de todo el contenido (configuración, secciones, cuadros, avisos, redes sociales y galería), o restaura una copia anterior. La restauración devuelve la configuración y los textos de las secciones; las imágenes no se modifican.</p>
+                <p class="texto-Dinamico">Descarga una copia completa del sitio en un solo archivo: configuración y colores, logo, textos, secciones y cuadros con su orden, fotos con su posición y tamaño, calendario, redes sociales y galería (fotos y videos). Al restaurar, todo vuelve exactamente como estaba en ese momento. No incluye usuarios ni contraseñas. Antes de restaurar, el servidor guarda automáticamente una copia del estado actual.</p>
                 <div class="mant-btns" style="margin-top:1rem;">
                     <button type="button" class="mant-btn" onclick="descargarRespaldo(this)">⬇️ Descargar respaldo</button>
                     <button type="button" class="mant-btn" onclick="document.getElementById('respaldo-archivo').click()">⬆️ Restaurar respaldo</button>
-                    <input type="file" id="respaldo-archivo" accept=".json,application/json" hidden onchange="restaurarRespaldo(this)">
+                    <input type="file" id="respaldo-archivo" accept=".idec" hidden onchange="restaurarRespaldo(this)">
                 </div>
             </div>
         </div>
@@ -1838,64 +1838,43 @@
 
         // ===== RESPALDO Y RESTAURACIÓN =====
         async function descargarRespaldo(btn) {
-            btn.disabled = true;
-            const leer = async url => { try { const r = await fetch(url, { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+            const textoOriginal = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ Preparando respaldo...';
             try {
-                const [configuracion, contenido, apartados, avisos, redes_sociales, galeria] = await Promise.all([
-                    leer('/api/configuracion'), leer('/api/contenido'), leer('/api/apartados'),
-                    leer('/api/avisos'), leer('/api/redes-sociales'), leer('/api/galeria')
-                ]);
-                if (!configuracion || !contenido) { alert('No se pudo leer el contenido del sitio. Intenta de nuevo.'); return; }
-                const datos = { tipo: 'respaldo-idec', version: 1, fecha: new Date().toISOString(), configuracion, contenido, apartados, avisos, redes_sociales, galeria };
-                const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+                const res = await fetchAuth('/api/respaldo', { cache: 'no-store' });
+                if (res.status === 401) { mostrarLogin('Tu sesión expiró. Vuelve a iniciar sesión.'); return; }
+                if (!res.ok) { let m = 'No se pudo crear el respaldo.'; try { m = (await res.json()).error || m; } catch (e) {} alert(m); return; }
+                const faltantes = Number(res.headers.get('X-Respaldo-Faltantes') || 0);
+                const blob = await res.blob();
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `respaldo-idec-${new Date().toISOString().slice(0, 10)}.json`;
+                a.download = `respaldo-idec-${new Date().toISOString().slice(0, 10)}.idec`;
                 document.body.appendChild(a); a.click(); a.remove();
-                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-            } catch (err) { if (err.message !== 'Sesión expirada') alert('No se pudo crear el respaldo.'); }
-            finally { btn.disabled = false; }
+                setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                if (faltantes) alert(`Respaldo descargado, pero ${faltantes} archivo(s) de imagen que usa el sitio ya no existían en el servidor y no se pudieron incluir.`);
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('No se pudo crear el respaldo. Revisa tu conexión e intenta de nuevo.'); }
+            finally { btn.disabled = false; btn.textContent = textoOriginal; }
         }
 
         async function restaurarRespaldo(input) {
             const archivo = input.files[0];
             input.value = '';
             if (!archivo) return;
-            let datos;
-            try { datos = JSON.parse(await archivo.text()); } catch (e) { alert('El archivo no es un respaldo válido.'); return; }
-            if (!datos || datos.tipo !== 'respaldo-idec' || !datos.configuracion || !Array.isArray(datos.contenido)) { alert('El archivo no es un respaldo de este sitio.'); return; }
-            const fecha = datos.fecha ? new Date(datos.fecha).toLocaleString() : 'fecha desconocida';
-            if (!confirm(`¿Restaurar el respaldo del ${fecha}?\n\nSe reemplazarán la configuración y los textos de las secciones. Las imágenes, avisos del calendario, redes sociales y galería NO se modifican.\n\nTe recomiendo descargar un respaldo actual antes de continuar.`)) return;
-            const fallos = [];
+            if (!/\.idec$/i.test(archivo.name)) { alert('Selecciona un archivo de respaldo .idec descargado desde este panel.'); return; }
+            if (!confirm(`¿Restaurar el respaldo «${archivo.name}»?\n\nSe reemplazará TODO el contenido actual del sitio (configuración, logo, textos, secciones, cuadros, fotos, calendario, redes sociales y galería) por lo que contiene el archivo.\n\nEl servidor guardará antes una copia del estado actual.`)) return;
+            const btns = document.querySelectorAll('#cfg-respaldo .mant-btn');
+            btns.forEach(b => b.disabled = true);
+            const prog = document.createElement('p');
+            prog.className = 'texto-Dinamico'; prog.textContent = '⏳ Restaurando, no cierres esta ventana...';
+            btns[0].parentElement.after(prog);
             try {
-                // 1) Configuración (sin id ni logo, que se manejan aparte)
-                const cfg = {};
-                Object.entries(datos.configuracion).forEach(([k, v]) => {
-                    if (k === 'id' || k === 'logo_url' || /_at$/.test(k) || v === null || v === undefined) return;
-                    cfg[k] = v;
-                });
-                const rc = await fetch('/api/configuracion', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
-                if (!rc.ok) fallos.push('configuración');
-                // 2) Textos de las secciones (conservando sus imágenes actuales)
-                for (const s of datos.contenido) {
-                    const actual = contenidosCache.find(c => c.seccion === s.seccion);
-                    let r;
-                    if (actual) {
-                        const fd = new FormData();
-                        fd.append('titulo', s.titulo || '');
-                        fd.append('texto', s.texto || '');
-                        fd.append('layout', actual.layout || '');
-                        fd.append('tamano', actual.tamano || '');
-                        fd.append('conservar', JSON.stringify(parseImgs(actual.imagenes)));
-                        r = await fetch(`/api/contenido/${s.seccion}`, { method: 'PUT', body: fd });
-                    } else {
-                        r = await fetch('/api/contenido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seccion: s.seccion, titulo: s.titulo || '', texto: s.texto || '' }) });
-                    }
-                    if (!r.ok) fallos.push(`sección «${s.titulo || s.seccion}»`);
-                }
-            } catch (err) { if (err.message === 'Sesión expirada') return; fallos.push('error de conexión'); }
-            await inicializarAdmin();
-            alert(fallos.length ? 'Restauración terminada, pero falló: ' + fallos.join(', ') + '.' : 'Respaldo restaurado correctamente.');
+                const res = await fetch('/api/respaldo', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: archivo });
+                let r = {}; try { r = await res.json(); } catch (e) {}
+                if (!res.ok) { alert('No se pudo restaurar: ' + (r.error || 'error desconocido') + '\n\nNo se hizo ningún cambio en el sitio.'); return; }
+                alert('Respaldo restaurado correctamente.');
+                location.reload();
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión durante la restauración. Revisa el sitio antes de volver a intentarlo.'); }
+            finally { prog.remove(); btns.forEach(b => b.disabled = false); }
         }
 
         // ===== MODO MANTENIMIENTO =====
