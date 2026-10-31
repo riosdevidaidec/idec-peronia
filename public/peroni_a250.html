@@ -681,7 +681,7 @@
         /* ===== INTERRUPTOR DE MANTENIMIENTO ===== */
         .mant-bar {
             max-width: 1000px; width: calc(100% - 40px); box-sizing: border-box;
-            margin: 1.5rem auto -1.5rem; padding: 1rem 1.5rem;
+            margin: 1.5rem auto 0; padding: 1rem 1.5rem;
             background: rgba(255,255,255,0.98); border-radius: 20px;
             border-left: 6px solid #94a3b8;
             box-shadow: 0 10px 30px rgba(15,51,128,0.10);
@@ -715,6 +715,21 @@
         .mant-switch input:checked ~ .mant-knob { transform: translateX(50px); }
         .mant-switch input:disabled { cursor: wait; }
         .mant-switch input:focus-visible ~ .mant-pill { outline: 3px solid var(--primary-light); outline-offset: 3px; }
+
+        .mant-bar + .mant-bar { margin-top: 1rem; }
+        .mant-bar { margin-bottom: 0; }
+        .mant-bar.ultimo { margin-bottom: -1.5rem; }
+        .mant-detalles { flex-basis: 100%; }
+        .mant-detalles summary { cursor: pointer; font-weight: 700; color: var(--primary-light); font-size: 0.92rem; }
+        .mant-form { display: grid; gap: 0.8rem; margin-top: 0.9rem; }
+        .mant-form label { display: block; font-weight: 600; font-size: 0.85rem; color: #475569; margin-bottom: 4px; }
+        .mant-form input, .mant-form textarea { width: 100%; box-sizing: border-box; padding: 0.7rem 0.9rem; border: 1.5px solid var(--border-color); border-radius: 12px; font: inherit; }
+        .mant-form .fila { display: grid; grid-template-columns: 2fr 1fr; gap: 0.8rem; }
+        @media (max-width: 600px) { .mant-form .fila { grid-template-columns: 1fr; } }
+        .mant-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+        .mant-btn { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; border: 2px solid var(--accent); padding: 0.6rem 1.2rem; border-radius: 50px; font-weight: 700; cursor: pointer; font-size: 0.9rem; transition: var(--transition); }
+        .mant-btn:hover { background: var(--accent); color: var(--primary); }
+        .mant-btn:disabled { opacity: 0.6; cursor: wait; }
     </style>
 </head>
 <body>
@@ -768,6 +783,35 @@
             <span class="mant-track"></span>
             <span class="mant-knob"></span>
         </label>
+        <details class="mant-detalles">
+            <summary>✏️ Editar mensaje, hora de regreso y versículo</summary>
+            <div class="mant-form">
+                <div><label for="mant-mensaje">Mensaje para los visitantes:</label>
+                    <textarea id="mant-mensaje" rows="2" placeholder="El sitio web está en mantenimiento, por favor regresa más tarde."></textarea></div>
+                <div><label for="mant-regreso">Hora o fecha estimada de regreso (opcional):</label>
+                    <input type="text" id="mant-regreso" placeholder="Ej: Volvemos hoy a las 6:00 p.m."></div>
+                <div class="fila">
+                    <div><label for="mant-versiculo">Versículo:</label>
+                        <input type="text" id="mant-versiculo" placeholder="«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»"></div>
+                    <div><label for="mant-cita">Cita:</label>
+                        <input type="text" id="mant-cita" placeholder="Salmo 40:1"></div>
+                </div>
+                <div class="mant-btns"><button type="button" class="mant-btn" id="mant-guardar" onclick="guardarMensajeMant()">Guardar mensaje</button></div>
+            </div>
+        </details>
+    </div>
+
+    <!-- RESPALDO Y RESTAURACIÓN -->
+    <div class="mant-bar ultimo" id="respaldo-bar" style="border-left-color: var(--primary-light);">
+        <div class="mant-info">
+            <strong>💾 Respaldo y restauración</strong>
+            <span>Descarga una copia de todo el contenido del sitio, o restaura una copia anterior.</span>
+        </div>
+        <div class="mant-btns">
+            <button type="button" class="mant-btn" onclick="descargarRespaldo(this)">⬇️ Descargar respaldo</button>
+            <button type="button" class="mant-btn" onclick="document.getElementById('respaldo-archivo').click()">⬆️ Restaurar respaldo</button>
+            <input type="file" id="respaldo-archivo" accept=".json,application/json" hidden onchange="restaurarRespaldo(this)">
+        </div>
     </div>
 
     <div class="container" id="admin-vistas-container"></div>
@@ -1210,6 +1254,95 @@
         });
 
 
+
+        // ===== MENSAJE DE MANTENIMIENTO EDITABLE =====
+        const MANT_CAMPOS = { mant_mensaje: 'mant-mensaje', mant_regreso: 'mant-regreso', mant_versiculo: 'mant-versiculo', mant_cita: 'mant-cita' };
+        function cargarMensajeMant(cfg) {
+            Object.entries(MANT_CAMPOS).forEach(([k, id]) => { const el = document.getElementById(id); if (el) el.value = cfg[k] || ''; });
+        }
+        async function guardarMensajeMant() {
+            const btn = document.getElementById('mant-guardar');
+            const datos = {};
+            Object.entries(MANT_CAMPOS).forEach(([k, id]) => { datos[k] = document.getElementById(id).value.trim(); });
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/configuracion', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+                if (!res.ok) throw new Error('http');
+                const cfg = await (await fetch('/api/configuracion', { cache: 'no-store' })).json();
+                if (Object.keys(datos).some(k => (cfg[k] || '') !== datos[k])) throw new Error('no-guardado');
+                cfgGlobal = cfg;
+                alert('Mensaje de mantenimiento guardado.');
+            } catch (err) {
+                if (err.message !== 'Sesión expirada') {
+                    alert(err.message === 'no-guardado'
+                        ? 'El servidor no guardó los campos del mensaje (mant_mensaje, mant_regreso, mant_versiculo, mant_cita). Hay que agregarlos en la configuración del servidor.'
+                        : 'No se pudo guardar el mensaje.');
+                }
+            } finally { btn.disabled = false; }
+        }
+
+        // ===== RESPALDO Y RESTAURACIÓN =====
+        async function descargarRespaldo(btn) {
+            btn.disabled = true;
+            const leer = async url => { try { const r = await fetch(url, { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+            try {
+                const [configuracion, contenido, apartados, avisos, redes_sociales, galeria] = await Promise.all([
+                    leer('/api/configuracion'), leer('/api/contenido'), leer('/api/apartados'),
+                    leer('/api/avisos'), leer('/api/redes-sociales'), leer('/api/galeria')
+                ]);
+                if (!configuracion || !contenido) { alert('No se pudo leer el contenido del sitio. Intenta de nuevo.'); return; }
+                const datos = { tipo: 'respaldo-idec', version: 1, fecha: new Date().toISOString(), configuracion, contenido, apartados, avisos, redes_sociales, galeria };
+                const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `respaldo-idec-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('No se pudo crear el respaldo.'); }
+            finally { btn.disabled = false; }
+        }
+
+        async function restaurarRespaldo(input) {
+            const archivo = input.files[0];
+            input.value = '';
+            if (!archivo) return;
+            let datos;
+            try { datos = JSON.parse(await archivo.text()); } catch (e) { alert('El archivo no es un respaldo válido.'); return; }
+            if (!datos || datos.tipo !== 'respaldo-idec' || !datos.configuracion || !Array.isArray(datos.contenido)) { alert('El archivo no es un respaldo de este sitio.'); return; }
+            const fecha = datos.fecha ? new Date(datos.fecha).toLocaleString() : 'fecha desconocida';
+            if (!confirm(`¿Restaurar el respaldo del ${fecha}?\n\nSe reemplazarán la configuración y los textos de las secciones. Las imágenes, avisos del calendario, redes sociales y galería NO se modifican.\n\nTe recomiendo descargar un respaldo actual antes de continuar.`)) return;
+            const fallos = [];
+            try {
+                // 1) Configuración (sin id ni logo, que se manejan aparte)
+                const cfg = {};
+                Object.entries(datos.configuracion).forEach(([k, v]) => {
+                    if (k === 'id' || k === 'logo_url' || /_at$/.test(k) || v === null || v === undefined) return;
+                    cfg[k] = v;
+                });
+                const rc = await fetch('/api/configuracion', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+                if (!rc.ok) fallos.push('configuración');
+                // 2) Textos de las secciones (conservando sus imágenes actuales)
+                for (const s of datos.contenido) {
+                    const actual = contenidosCache.find(c => c.seccion === s.seccion);
+                    let r;
+                    if (actual) {
+                        const fd = new FormData();
+                        fd.append('titulo', s.titulo || '');
+                        fd.append('texto', s.texto || '');
+                        fd.append('layout', actual.layout || '');
+                        fd.append('tamano', actual.tamano || '');
+                        fd.append('conservar', JSON.stringify(parseImgs(actual.imagenes)));
+                        r = await fetch(`/api/contenido/${s.seccion}`, { method: 'PUT', body: fd });
+                    } else {
+                        r = await fetch('/api/contenido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seccion: s.seccion, titulo: s.titulo || '', texto: s.texto || '' }) });
+                    }
+                    if (!r.ok) fallos.push(`sección «${s.titulo || s.seccion}»`);
+                }
+            } catch (err) { if (err.message === 'Sesión expirada') return; fallos.push('error de conexión'); }
+            await inicializarAdmin();
+            alert(fallos.length ? 'Restauración terminada, pero falló: ' + fallos.join(', ') + '.' : 'Respaldo restaurado correctamente.');
+        }
+
         // ===== MODO MANTENIMIENTO =====
         const mantActivo = v => v === true || v === 1 || v === '1' || v === 'true';
         function pintarMantenimiento(on) {
@@ -1252,6 +1385,7 @@
                 const config = await resConf.json();
                 cfgGlobal = config;
                 pintarMantenimiento(mantActivo(config.modo_mantenimiento));
+                cargarMensajeMant(config);
                 if (config.nombre_iglesia) {
                     document.getElementById('admin-header-titulo').innerHTML = htmlNombre(config.nombre_iglesia);
                     document.getElementById('admin-footer-name').innerText = plainNombre(config.nombre_iglesia);
