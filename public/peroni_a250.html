@@ -730,6 +730,27 @@
         .mant-btn { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; border: 2px solid var(--accent); padding: 0.6rem 1.2rem; border-radius: 50px; font-weight: 700; cursor: pointer; font-size: 0.9rem; transition: var(--transition); }
         .mant-btn:hover { background: var(--accent); color: var(--primary); }
         .mant-btn:disabled { opacity: 0.6; cursor: wait; }
+
+        /* ===== PANEL DE CONFIGURACIONES ===== */
+        .cfg-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .cfg-tab { background: #fff; border: 2px solid var(--border-color); color: var(--primary); padding: 0.55rem 1rem; border-radius: 50px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: var(--transition); }
+        .cfg-tab:hover { border-color: var(--primary-light); }
+        .cfg-tab.activa { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; border-color: var(--accent); }
+        .cfg-pane { display: none; }
+        .cfg-pane.activa { display: block; }
+        .cfg-pane .mant-bar { margin: 0 0 1.5rem; width: 100%; }
+        .mant-form select { width: 100%; box-sizing: border-box; padding: 0.7rem 0.9rem; border: 1.5px solid var(--border-color); border-radius: 12px; font: inherit; background: #fff; }
+        .cfg-tabla { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+        .cfg-tabla th, .cfg-tabla td { text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        .cfg-tabla th { color: var(--primary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .cfg-tabla-wrap { overflow-x: auto; }
+        .cfg-peligro { background: #fee2e2; color: #b91c1c; border: none; border-radius: 10px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+        .cfg-barra-fila { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 0.9rem; }
+        .cfg-barra-fila .et { width: 150px; flex: 0 0 auto; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cfg-barra-fila .bar { flex: 1; background: #e2e8f0; border-radius: 8px; height: 14px; overflow: hidden; }
+        .cfg-barra-fila .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-orange), var(--accent)); border-radius: 8px; }
+        .cfg-barra-fila .n { width: 44px; text-align: right; font-weight: 700; color: var(--primary); }
+        .cfg-total { font-size: 2.2rem; font-weight: 800; color: var(--primary); margin: 0 0 0.5rem; }
     </style>
 </head>
 <body>
@@ -767,50 +788,146 @@
         <a href="index.html" target="_blank" class="btn-dev">🌐 Ver Sitio Público</a>
         <button onclick="abrirModalNuevaSeccion()" class="btn-dev">✨ + Crear Sección</button>
         <button onclick="mostrarSeccionAdmin('configuracion-tema', null)" class="btn-dev">⚙️ Estilos</button>
+        <button onclick="mostrarSeccionAdmin('configuraciones', null)" class="btn-dev">🔧 Configuraciones</button>
         <button onclick="cerrarSesion()" class="btn-dev">🚪 Salir</button>
     </div>
 
 
-    <!-- INTERRUPTOR DE MODO MANTENIMIENTO -->
-    <div class="mant-bar" id="mant-bar">
-        <div class="mant-info">
-            <strong>🛠️ Modo mantenimiento del sitio público</strong>
-            <span id="mant-estado">Apagado: el sitio público funciona con normalidad.</span>
-        </div>
-        <label class="mant-switch" title="Activar / desactivar mantenimiento">
-            <input type="checkbox" id="mant-check" role="switch" aria-label="Modo mantenimiento" onchange="alternarMantenimiento(this)">
-            <span class="mant-pill"></span>
-            <span class="mant-track"></span>
-            <span class="mant-knob"></span>
-        </label>
-        <details class="mant-detalles">
-            <summary>✏️ Editar mensaje, hora de regreso y versículo</summary>
-            <div class="mant-form">
-                <div><label for="mant-mensaje">Mensaje para los visitantes:</label>
-                    <textarea id="mant-mensaje" rows="2" placeholder="El sitio web está en mantenimiento, por favor regresa más tarde."></textarea></div>
-                <div><label for="mant-regreso">Hora o fecha estimada de regreso (opcional):</label>
-                    <input type="text" id="mant-regreso" placeholder="Ej: Volvemos hoy a las 6:00 p.m."></div>
-                <div class="fila">
-                    <div><label for="mant-versiculo">Versículo:</label>
-                        <input type="text" id="mant-versiculo" placeholder="«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»"></div>
-                    <div><label for="mant-cita">Cita:</label>
-                        <input type="text" id="mant-cita" placeholder="Salmo 40:1"></div>
-                </div>
-                <div class="mant-btns"><button type="button" class="mant-btn" id="mant-guardar" onclick="guardarMensajeMant()">Guardar mensaje</button></div>
-            </div>
-        </details>
-    </div>
 
-    <!-- RESPALDO Y RESTAURACIÓN -->
-    <div class="mant-bar ultimo" id="respaldo-bar" style="border-left-color: var(--primary-light);">
-        <div class="mant-info">
-            <strong>💾 Respaldo y restauración</strong>
-            <span>Descarga una copia de todo el contenido del sitio, o restaura una copia anterior.</span>
+    <!-- PANEL DE CONFIGURACIONES (se inserta en el contenedor desde JavaScript) -->
+    <div id="seccion-configuraciones" class="seccion-vista">
+        <div class="cfg-tabs" role="tablist">
+            <button class="cfg-tab activa" data-pane="general" onclick="cfgTab('general')">🛠️ General</button>
+            <button class="cfg-tab" data-pane="seguridad" onclick="cfgTab('seguridad')">🔑 Seguridad</button>
+            <button class="cfg-tab" data-pane="calendario" onclick="cfgTab('calendario')">📅 Avisos</button>
+            <button class="cfg-tab" data-pane="previa" onclick="cfgTab('previa')">👁️ Vista previa</button>
+            <button class="cfg-tab" data-pane="estadisticas" onclick="cfgTab('estadisticas')">📊 Visitas</button>
+            <button class="cfg-tab" data-pane="respaldo" onclick="cfgTab('respaldo')">💾 Respaldo</button>
+            <button class="cfg-tab" data-pane="historial" onclick="cfgTab('historial')">🕘 Historial</button>
         </div>
-        <div class="mant-btns">
-            <button type="button" class="mant-btn" onclick="descargarRespaldo(this)">⬇️ Descargar respaldo</button>
-            <button type="button" class="mant-btn" onclick="document.getElementById('respaldo-archivo').click()">⬆️ Restaurar respaldo</button>
-            <input type="file" id="respaldo-archivo" accept=".json,application/json" hidden onchange="restaurarRespaldo(this)">
+
+        <!-- GENERAL -->
+        <div class="cfg-pane activa" id="cfg-general">
+            <div class="mant-bar" id="mant-bar">
+                <div class="mant-info">
+                    <strong>🛠️ Modo mantenimiento del sitio público</strong>
+                    <span id="mant-estado">Apagado: el sitio público funciona con normalidad.</span>
+                </div>
+                <label class="mant-switch"><input type="checkbox" id="mant-check" role="switch" aria-label="Modo mantenimiento" onchange="alternarMantenimiento(this)"><span class="mant-pill"></span><span class="mant-track"></span><span class="mant-knob"></span></label>
+            </div>
+            <div class="card">
+                <div class="card-header-flex"><h2>✏️ Mensaje de mantenimiento</h2></div>
+                <div class="mant-form">
+                    <div><label for="mant-mensaje">Mensaje para los visitantes:</label>
+                        <textarea id="mant-mensaje" rows="2" placeholder="El sitio web está en mantenimiento, por favor regresa más tarde."></textarea></div>
+                    <div><label for="mant-regreso">Hora o fecha estimada de regreso (opcional):</label>
+                        <input type="text" id="mant-regreso" placeholder="Ej: Volvemos hoy a las 6:00 p.m."></div>
+                    <div class="fila">
+                        <div><label for="mant-versiculo">Versículo:</label>
+                            <input type="text" id="mant-versiculo" placeholder="«Esperé yo a Jehová, y se inclinó a mí, y oyó mi clamor.»"></div>
+                        <div><label for="mant-cita">Cita:</label>
+                            <input type="text" id="mant-cita" placeholder="Salmo 40:1"></div>
+                    </div>
+                    <div class="mant-btns">
+                        <button type="button" class="mant-btn" id="mant-guardar" onclick="guardarMensajeMant()">Guardar mensaje</button>
+                        <button type="button" class="mant-btn" onclick="abrirVistaPrevia('mant')">👁️ Ver cómo queda</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEGURIDAD -->
+        <div class="cfg-pane" id="cfg-seguridad">
+            <div class="card">
+                <div class="card-header-flex"><h2>🔑 Cambiar mi contraseña</h2></div>
+                <div class="mant-form">
+                    <div><label for="cfg-pass-actual">Contraseña actual:</label><input type="password" id="cfg-pass-actual" autocomplete="current-password"></div>
+                    <div class="fila">
+                        <div><label for="cfg-pass-nueva">Nueva contraseña (mínimo 8 caracteres):</label><input type="password" id="cfg-pass-nueva" autocomplete="new-password"></div>
+                        <div><label for="cfg-pass-repetir">Repetir nueva contraseña:</label><input type="password" id="cfg-pass-repetir" autocomplete="new-password"></div>
+                    </div>
+                    <div class="mant-btns"><button type="button" class="mant-btn" onclick="cambiarMiPassword(this)">Cambiar contraseña</button></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header-flex"><h2>👥 Administradores</h2></div>
+                <div id="cfg-usuarios-lista"><p class="aviso-vacio">Cargando…</p></div>
+                <div class="mant-form" style="margin-top:1.2rem; padding-top:1.2rem; border-top:2px solid #f1f5f9;">
+                    <strong style="color:var(--primary);">Agregar otra persona</strong>
+                    <div class="fila">
+                        <div><label for="cfg-user-nombre">Usuario:</label><input type="text" id="cfg-user-nombre" autocomplete="off"></div>
+                        <div><label for="cfg-user-pass">Contraseña (mín. 8):</label><input type="password" id="cfg-user-pass" autocomplete="new-password"></div>
+                    </div>
+                    <div><label for="cfg-user-rol">Permisos:</label>
+                        <select id="cfg-user-rol">
+                            <option value="editor">Editor: textos, avisos y redes sociales</option>
+                            <option value="galeria">Galería: solo subir y borrar fotos</option>
+                            <option value="admin">Administrador: todo, incluidas estas configuraciones</option>
+                        </select></div>
+                    <div class="mant-btns"><button type="button" class="mant-btn" onclick="crearUsuario(this)">Agregar administrador</button></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AVISOS / CALENDARIO -->
+        <div class="cfg-pane" id="cfg-calendario">
+            <div class="mant-bar" style="border-left-color: var(--accent-orange);">
+                <div class="mant-info">
+                    <strong>📅 Ocultar eventos vencidos del calendario público</strong>
+                    <span>«Próximos eventos» ya muestra solo lo que viene. Al encender esto, los eventos pasados también desaparecen del calendario.</span>
+                </div>
+                <label class="mant-switch"><input type="checkbox" id="cfg-vencidos-check" role="switch" aria-label="Ocultar eventos vencidos" onchange="alternarVencidos(this)"><span class="mant-pill"></span><span class="mant-track"></span><span class="mant-knob"></span></label>
+            </div>
+            <div class="card">
+                <div class="card-header-flex"><h2>🗑️ Eventos ya vencidos</h2></div>
+                <div id="cfg-vencidos-lista"></div>
+            </div>
+        </div>
+
+        <!-- VISTA PREVIA -->
+        <div class="cfg-pane" id="cfg-previa">
+            <div class="card">
+                <div class="card-header-flex"><h2>👁️ Vista previa antes de publicar</h2></div>
+                <p class="texto-Dinamico">Abre el sitio en otra pestaña usando lo que tengas escrito en <strong>⚙️ Estilos</strong> y en el <strong>mensaje de mantenimiento</strong>, aunque todavía no lo hayas guardado. Los visitantes no ven nada de esto hasta que guardes.</p>
+                <div class="mant-btns" style="margin-top:1rem;">
+                    <button type="button" class="mant-btn" onclick="abrirVistaPrevia('sitio')">🌐 Ver el sitio con mis cambios</button>
+                    <button type="button" class="mant-btn" onclick="abrirVistaPrevia('mant')">🛠️ Ver pantalla de mantenimiento</button>
+                </div>
+                <p class="texto-Dinamico" style="margin-top:1rem; font-size:0.9rem;">Consejo: escribe tus cambios en «Estilos», NO pulses guardar, y vuelve aquí para ver cómo quedan.</p>
+            </div>
+        </div>
+
+        <!-- VISITAS -->
+        <div class="cfg-pane" id="cfg-estadisticas">
+            <div class="card">
+                <div class="card-header-flex"><h2>📊 Visitas al sitio</h2>
+                    <select id="cfg-visitas-dias" onchange="cargarVisitas()" style="padding:8px 12px; border-radius:10px; border:1.5px solid var(--border-color);">
+                        <option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option>
+                    </select></div>
+                <div id="cfg-visitas-resultado"><p class="aviso-vacio">Cargando…</p></div>
+            </div>
+        </div>
+
+        <!-- RESPALDO -->
+        <div class="cfg-pane" id="cfg-respaldo">
+            <div class="card">
+                <div class="card-header-flex"><h2>💾 Respaldo y restauración</h2></div>
+                <p class="texto-Dinamico">Descarga una copia de todo el contenido (configuración, secciones, cuadros, avisos, redes sociales y galería), o restaura una copia anterior. La restauración devuelve la configuración y los textos de las secciones; las imágenes no se modifican.</p>
+                <div class="mant-btns" style="margin-top:1rem;">
+                    <button type="button" class="mant-btn" onclick="descargarRespaldo(this)">⬇️ Descargar respaldo</button>
+                    <button type="button" class="mant-btn" onclick="document.getElementById('respaldo-archivo').click()">⬆️ Restaurar respaldo</button>
+                    <input type="file" id="respaldo-archivo" accept=".json,application/json" hidden onchange="restaurarRespaldo(this)">
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORIAL -->
+        <div class="cfg-pane" id="cfg-historial">
+            <div class="card">
+                <div class="card-header-flex"><h2>🕘 Historial de cambios</h2>
+                    <button type="button" class="mant-btn" onclick="cargarHistorial()">Actualizar</button></div>
+                <div id="cfg-historial-lista"><p class="aviso-vacio">Cargando…</p></div>
+            </div>
         </div>
     </div>
 
@@ -955,6 +1072,7 @@
                 if (t) opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + t } };
             }
             const res = await _fetchOriginal(url, opts);
+            if (esApi && metodo !== 'GET' && res.ok && !url.startsWith('/api/logout')) registrarHistorial(metodo, url);
             if (esApi && metodo !== 'GET' && res.status === 401) {
                 sessionStorage.removeItem(TOKEN_KEY);
                 mostrarLogin('Tu sesión expiró. Vuelve a iniciar sesión y repite el cambio.');
@@ -983,6 +1101,8 @@
                 const data = await res.json();
                 if (!res.ok) { err.innerText = data.error || 'No se pudo iniciar sesión'; return; }
                 sessionStorage.setItem(TOKEN_KEY, data.token);
+                sessionStorage.setItem('idec_usuario', data.usuario || document.getElementById('login-usuario').value.trim());
+                sessionStorage.setItem('idec_rol', data.rol || 'admin');
                 document.getElementById('login-password').value = '';
                 document.getElementById('login-overlay').classList.add('oculto');
                 inicializarAdmin();
@@ -1255,6 +1375,220 @@
 
 
 
+
+        // ===== PANEL DE CONFIGURACIONES =====
+        const panelCfg = document.getElementById('seccion-configuraciones');
+        panelCfg.remove(); // se vuelve a insertar cada vez que se reconstruye el panel
+        let cfgTabActual = 'general';
+        let histServidor = false;
+        const fetchAuth = (u, o = {}) => _fetchOriginal(u, { ...o, headers: { ...(o.headers || {}), Authorization: 'Bearer ' + sessionStorage.getItem(TOKEN_KEY) } });
+        const msgNoServidor = txt => `<p class="aviso-vacio">Tu servidor todavía no tiene la función de ${txt}. Los pasos para activarla están en <strong>ENDPOINTS_SERVIDOR.md</strong>.</p>`;
+
+        function agregarPanelConfiguraciones(container) {
+            // Quien no es administrador no ve Estilos ni Configuraciones (el servidor además lo bloquea)
+            if ((sessionStorage.getItem('idec_rol') || 'admin') !== 'admin') {
+                document.querySelectorAll('.btn-dev').forEach(b => { if (/Configuraciones|Estilos/.test(b.textContent)) b.style.display = 'none'; });
+                return;
+            }
+            panelCfg.className = 'seccion-vista' + (seccionAdminActual === 'configuraciones' ? ' activa' : '');
+            container.appendChild(panelCfg);
+            pintarMantenimiento(mantActivo(cfgGlobal.modo_mantenimiento));
+            cargarMensajeMant(cfgGlobal);
+            document.getElementById('cfg-vencidos-check').checked = mantActivo(cfgGlobal.ocultar_vencidos);
+            cfgTab(cfgTabActual);
+        }
+
+        function cfgTab(nombre) {
+            cfgTabActual = nombre;
+            panelCfg.querySelectorAll('.cfg-tab').forEach(b => b.classList.toggle('activa', b.dataset.pane === nombre));
+            panelCfg.querySelectorAll('.cfg-pane').forEach(p => p.classList.toggle('activa', p.id === 'cfg-' + nombre));
+            if (nombre === 'seguridad') cargarUsuarios();
+            else if (nombre === 'calendario') pintarVencidos();
+            else if (nombre === 'estadisticas') cargarVisitas();
+            else if (nombre === 'historial') cargarHistorial();
+        }
+
+        // Guarda ajustes en la configuración y comprueba que el servidor los conservó
+        async function guardarCfg(datos) {
+            try {
+                const r = await fetch('/api/configuracion', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+                if (!r.ok) throw new Error('http');
+                const cfg = await (await fetch('/api/configuracion', { cache: 'no-store' })).json();
+                const norm = v => v === true ? '1' : v === false ? '0' : String(v ?? '');
+                if (Object.keys(datos).some(k => norm(cfg[k]) !== norm(datos[k]))) throw new Error('no-guardado');
+                cfgGlobal = cfg;
+                return true;
+            } catch (err) {
+                if (err.message !== 'Sesión expirada') {
+                    alert(err.message === 'no-guardado'
+                        ? 'El servidor no guardó ese ajuste. Hay que agregar el campo en el servidor (ver ENDPOINTS_SERVIDOR.md).'
+                        : 'No se pudo guardar el ajuste.');
+                }
+                return false;
+            }
+        }
+
+        // ---- Seguridad ----
+        async function cambiarMiPassword(btn) {
+            const actual = document.getElementById('cfg-pass-actual').value;
+            const nueva = document.getElementById('cfg-pass-nueva').value;
+            const repetir = document.getElementById('cfg-pass-repetir').value;
+            if (!actual || !nueva) { alert('Escribe tu contraseña actual y la nueva.'); return; }
+            if (nueva.length < 8) { alert('La nueva contraseña debe tener al menos 8 caracteres.'); return; }
+            if (nueva !== repetir) { alert('Las contraseñas nuevas no coinciden.'); return; }
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/cuenta/password', { method: 'POST', headers: JSON_H, body: JSON.stringify({ actual, nueva }) });
+                if (r.status === 404) { alert('Tu servidor todavía no tiene esta función (ver ENDPOINTS_SERVIDOR.md).'); return; }
+                if (!r.ok) { let m = 'No se pudo cambiar la contraseña.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
+                ['cfg-pass-actual', 'cfg-pass-nueva', 'cfg-pass-repetir'].forEach(id => document.getElementById(id).value = '');
+                alert('Contraseña cambiada correctamente.');
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión.'); }
+            finally { btn.disabled = false; }
+        }
+
+        const ROLES = { admin: 'Administrador', editor: 'Editor', galeria: 'Galería' };
+        async function cargarUsuarios() {
+            const box = document.getElementById('cfg-usuarios-lista');
+            if (!box) return;
+            try {
+                const r = await fetchAuth('/api/usuarios', { cache: 'no-store' });
+                if (r.status === 404 || r.status === 405) { box.innerHTML = msgNoServidor('varios administradores'); return; }
+                if (!r.ok) { box.innerHTML = '<p class="aviso-vacio">No tienes permiso para ver los administradores.</p>'; return; }
+                const lista = await r.json();
+                box.innerHTML = '<div class="cfg-tabla-wrap"><table class="cfg-tabla"><tr><th>Usuario</th><th>Permisos</th><th></th></tr>' +
+                    lista.map(u => `<tr><td>${esc(u.usuario)}</td><td>${esc(ROLES[u.rol] || u.rol || '—')}</td><td><button class="cfg-peligro" onclick="eliminarUsuario(${Number(u.id)}, '${esc(u.usuario).replace(/'/g, '')}')">Quitar</button></td></tr>`).join('') +
+                    '</table></div>';
+            } catch (e) { box.innerHTML = '<p class="aviso-vacio">No se pudo cargar la lista.</p>'; }
+        }
+        async function crearUsuario(btn) {
+            const usuario = document.getElementById('cfg-user-nombre').value.trim();
+            const password = document.getElementById('cfg-user-pass').value;
+            const rol = document.getElementById('cfg-user-rol').value;
+            if (!usuario || password.length < 8) { alert('Escribe el usuario y una contraseña de al menos 8 caracteres.'); return; }
+            btn.disabled = true;
+            try {
+                const r = await fetch('/api/usuarios', { method: 'POST', headers: JSON_H, body: JSON.stringify({ usuario, password, rol }) });
+                if (r.status === 404) { alert('Tu servidor todavía no tiene esta función (ver ENDPOINTS_SERVIDOR.md).'); return; }
+                if (!r.ok) { let m = 'No se pudo agregar.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
+                document.getElementById('cfg-user-nombre').value = ''; document.getElementById('cfg-user-pass').value = '';
+                cargarUsuarios();
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión.'); }
+            finally { btn.disabled = false; }
+        }
+        async function eliminarUsuario(id, nombre) {
+            if (!confirm(`¿Quitar el acceso de «${nombre}»?`)) return;
+            try {
+                const r = await fetch('/api/usuarios/' + id, { method: 'DELETE' });
+                if (!r.ok) { let m = 'No se pudo quitar.'; try { m = (await r.json()).error || m; } catch (e) {} alert(m); return; }
+                cargarUsuarios();
+            } catch (err) { if (err.message !== 'Sesión expirada') alert('Error de conexión.'); }
+        }
+
+        // ---- Avisos vencidos ----
+        async function alternarVencidos(chk) {
+            const on = chk.checked;
+            chk.disabled = true;
+            if (!(await guardarCfg({ ocultar_vencidos: on ? 1 : 0 }))) chk.checked = !on;
+            chk.disabled = false;
+        }
+        function avisosVencidos() {
+            const d = new Date();
+            const hoy = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return (listaAvisosGlobal || []).filter(a => a.fecha_inicio && (a.fecha_fin || a.fecha_inicio).substring(0, 10) < hoy);
+        }
+        function pintarVencidos() {
+            const box = document.getElementById('cfg-vencidos-lista');
+            if (!box) return;
+            const v = avisosVencidos();
+            if (!v.length) { box.innerHTML = '<p class="aviso-vacio">No hay eventos vencidos. 🎉</p>'; return; }
+            box.innerHTML = `<p class="texto-Dinamico">Hay <strong>${v.length}</strong> evento(s) cuya fecha ya pasó:</p><div class="cfg-tabla-wrap"><table class="cfg-tabla"><tr><th>Evento</th><th>Terminó</th></tr>` +
+                v.map(a => `<tr><td>${esc(a.titulo)}</td><td>${esc((a.fecha_fin || a.fecha_inicio).substring(0, 10))}</td></tr>`).join('') +
+                '</table></div><div class="mant-btns" style="margin-top:1rem;"><button type="button" class="mant-btn" onclick="eliminarVencidos(this)">🗑️ Eliminar todos los vencidos</button></div>';
+        }
+        async function eliminarVencidos(btn) {
+            const v = avisosVencidos();
+            if (!v.length || !confirm(`¿Eliminar ${v.length} evento(s) vencido(s)? No se puede deshacer.\n\nTe recomiendo descargar un respaldo antes.`)) return;
+            btn.disabled = true;
+            let fallos = 0;
+            try {
+                for (const a of v) { const r = await fetch(`/api/avisos/${a.id}`, { method: 'DELETE' }); if (!r.ok) fallos++; }
+            } catch (err) { if (err.message === 'Sesión expirada') return; fallos++; }
+            await inicializarAdmin();
+            if (fallos) alert(`No se pudieron eliminar ${fallos} evento(s).`);
+        }
+
+        // ---- Vista previa ----
+        function abrirVistaPrevia(modo) {
+            const v = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+            const cfg = {
+                nombre_iglesia: v('conf-nombre'), subtitulo_iglesia: v('conf-subtitulo'),
+                color_primary: v('conf-primary'), color_accent: v('conf-accent'), color_red: v('conf-red'),
+                versiculo_texto: v('conf-versiculo'), versiculo_cita: v('conf-cita'), pie_texto: v('conf-pie'),
+                texto_btn1: v('conf-btn1'), texto_btn2: v('conf-btn2'), titulo_proximos: v('conf-prox'), titulo_redes: v('conf-tredes'),
+                mant_mensaje: v('mant-mensaje'), mant_regreso: v('mant-regreso'), mant_versiculo: v('mant-versiculo'), mant_cita: v('mant-cita')
+            };
+            Object.keys(cfg).forEach(k => { if (!cfg[k]) delete cfg[k]; });
+            cfg.modo_mantenimiento = modo === 'mant' ? 1 : 0;
+            try { localStorage.setItem('idec_preview', JSON.stringify(cfg)); } catch (e) { alert('Tu navegador no permite guardar la vista previa.'); return; }
+            window.open('index.html?preview=1', '_blank');
+        }
+
+        // ---- Visitas ----
+        async function cargarVisitas() {
+            const box = document.getElementById('cfg-visitas-resultado');
+            if (!box) return;
+            try {
+                const dias = document.getElementById('cfg-visitas-dias').value;
+                const r = await fetchAuth('/api/visitas?dias=' + dias, { cache: 'no-store' });
+                if (r.status === 404 || r.status === 405) { box.innerHTML = msgNoServidor('contar visitas'); return; }
+                if (!r.ok) { box.innerHTML = '<p class="aviso-vacio">No se pudieron cargar las visitas.</p>'; return; }
+                const d = await r.json();
+                const barras = (filas, et, n) => { const max = Math.max(1, ...filas.map(f => Number(n(f)) || 0)); return filas.map(f => `<div class="cfg-barra-fila"><span class="et">${esc(et(f))}</span><span class="bar"><i style="width:${Math.round((Number(n(f)) || 0) / max * 100)}%"></i></span><span class="n">${Number(n(f)) || 0}</span></div>`).join('') || '<p class="aviso-vacio">Sin datos todavía.</p>'; };
+                const tituloSec = s => (contenidosCache.find(c => c.seccion === s) || {}).titulo || s || '(inicio)';
+                box.innerHTML = `<p class="cfg-total">${Number(d.total) || 0}</p><p class="texto-Dinamico" style="margin-top:-0.5rem;">visitas en este periodo</p>` +
+                    '<h3 style="color:var(--primary);">Por día</h3>' + barras(d.por_dia || [], f => f.fecha, f => f.visitas) +
+                    '<h3 style="color:var(--primary); margin-top:1.5rem;">Secciones más vistas</h3>' + barras(d.por_seccion || [], f => tituloSec(f.seccion), f => f.visitas);
+            } catch (e) { box.innerHTML = '<p class="aviso-vacio">No se pudieron cargar las visitas.</p>'; }
+        }
+
+        // ---- Historial ----
+        function describirAccion(metodo, url) {
+            const p = url.replace(/^\/api\//, '').split('?')[0].split('/');
+            const recurso = { configuracion: 'la configuración', contenido: 'una sección', apartados: 'un cuadro', avisos: 'un aviso del calendario', 'redes-sociales': 'una red social', galeria: 'una imagen de la galería', usuarios: 'un administrador', cuenta: 'su contraseña' }[p[0]] || p[0];
+            if (p[1] === 'logo') return 'Cambió el logo';
+            if (p[p.length - 1] === 'mover') return `Movió ${recurso}`;
+            const verbo = { POST: 'Agregó', PUT: 'Modificó', PATCH: 'Modificó', DELETE: 'Eliminó' }[metodo] || metodo;
+            const detalle = p[0] === 'contenido' && p[1] ? ` («${p[1]}»)` : '';
+            return `${p[0] === 'cuenta' ? 'Cambió' : verbo} ${recurso}${detalle}`;
+        }
+        function registrarHistorial(metodo, url) {
+            const e = { fecha: new Date().toISOString(), usuario: sessionStorage.getItem('idec_usuario') || '—', accion: describirAccion(metodo, url) };
+            try {
+                const l = JSON.parse(localStorage.getItem('idec_historial') || '[]');
+                l.unshift(e);
+                localStorage.setItem('idec_historial', JSON.stringify(l.slice(0, 300)));
+            } catch (x) {}
+        }
+        async function cargarHistorial() {
+            const box = document.getElementById('cfg-historial-lista');
+            if (!box) return;
+            let filas = null, nota = '';
+            try {
+                const r = await fetchAuth('/api/historial', { cache: 'no-store' });
+                if (r.ok) { filas = await r.json(); histServidor = true; }
+            } catch (e) {}
+            if (!filas) {
+                try { filas = JSON.parse(localStorage.getItem('idec_historial') || '[]'); } catch (e) { filas = []; }
+                nota = '<p class="texto-Dinamico" style="font-size:0.9rem;">Este registro se guarda solo en este navegador. Para un registro compartido entre todos los administradores, el servidor necesita la función descrita en <strong>ENDPOINTS_SERVIDOR.md</strong>.</p>';
+            }
+            box.innerHTML = nota + (filas.length
+                ? '<div class="cfg-tabla-wrap"><table class="cfg-tabla"><tr><th>Cuándo</th><th>Quién</th><th>Qué hizo</th></tr>' +
+                  filas.slice(0, 200).map(f => `<tr><td>${esc(new Date(f.fecha).toLocaleString())}</td><td>${esc(f.usuario || '—')}</td><td>${esc(f.accion)}</td></tr>`).join('') + '</table></div>'
+                : '<p class="aviso-vacio">Aún no hay cambios registrados.</p>') +
+                (histServidor ? '' : '<div class="mant-btns" style="margin-top:1rem;"><button type="button" class="cfg-peligro" onclick="localStorage.removeItem(\'idec_historial\'); cargarHistorial();">Borrar registro de este navegador</button></div>');
+        }
+
         // ===== MENSAJE DE MANTENIMIENTO EDITABLE =====
         const MANT_CAMPOS = { mant_mensaje: 'mant-mensaje', mant_regreso: 'mant-regreso', mant_versiculo: 'mant-versiculo', mant_cita: 'mant-cita' };
         function cargarMensajeMant(cfg) {
@@ -1408,7 +1742,7 @@
                 navContainer.innerHTML = '';
                 vistasContainer.innerHTML = '';
 
-                if (seccionAdminActual !== 'configuracion-tema' && !contenidosCache.some(c => c.seccion === seccionAdminActual)) {
+                if (seccionAdminActual !== 'configuracion-tema' && seccionAdminActual !== 'configuraciones' && !contenidosCache.some(c => c.seccion === seccionAdminActual)) {
                     seccionAdminActual = contenidosCache.length ? contenidosCache[0].seccion : null;
                 }
 
@@ -1569,12 +1903,14 @@
                 });
 
                 agregarSeccionConfiguracionAdmin(navContainer, vistasContainer);
+                agregarPanelConfiguraciones(vistasContainer);
 
                 const resAv = await fetch('/api/avisos');
                 listaAvisosGlobal = await resAv.json();
                 const hoy = new Date();
                 fechaSeleccionadaStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
                 renderizarCalendarioAdmin();
+                pintarVencidos();
 
                 // Cargar redes sociales de inmediato
                 await cargarRedesSocialesAdmin();
