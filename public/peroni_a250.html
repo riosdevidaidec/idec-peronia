@@ -751,6 +751,78 @@
         .cfg-barra-fila .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-orange), var(--accent)); border-radius: 8px; }
         .cfg-barra-fila .n { width: 44px; text-align: right; font-weight: 700; color: var(--primary); }
         .cfg-total { font-size: 2.2rem; font-weight: 800; color: var(--primary); margin: 0 0 0.5rem; }
+
+        /* ===== DISEÑO ADAPTABLE (RESPONSIVE) ===== */
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        footer { box-sizing: border-box; width: 100%; }
+        img, video, iframe, svg, canvas { max-width: 100%; }
+        .card, .texto-Dinamico, .hero blockquote, .mant-card { overflow-wrap: anywhere; }
+        /* Celulares con muesca / bordes redondeados */
+        body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+        /* Pantallas grandes: el contenido crece y la letra se agranda un poco */
+        @media (min-width: 1400px) { .container { max-width: 1180px; } }
+        @media (min-width: 1900px) { html { font-size: 112.5%; } .container { max-width: 1320px; } }
+        @media (min-width: 2500px) { html { font-size: 125%; } .container { max-width: 1500px; } }
+
+        /* Pantallas táctiles: botones fáciles de tocar (mínimo 44 px) */
+        @media (pointer: coarse) {
+            nav a, .btn-hero, .btn-modal, .btn-dev, .mant-btn, .cfg-tab, .menu-btn { min-height: 44px; box-sizing: border-box; }
+            nav a { display: inline-flex; align-items: center; justify-content: center; }
+        }
+
+        /* Celulares en horizontal: el encabezado no se queda pegado ocupando media pantalla */
+        @media (max-height: 500px) and (orientation: landscape) {
+            header { position: static; }
+            #btn-top { bottom: 8px; }
+        }
+
+        /* Celulares pequeños (320–360 px) */
+        @media (max-width: 360px) {
+            .container { padding: 0 .6rem; }
+            .card { padding: 1.1rem .9rem; border-radius: 18px; }
+            .galeria-publica-grid { grid-template-columns: 1fr; }
+            .hero { padding: 1.8rem .9rem; }
+            .calendar-widget { padding: .7rem; }
+        }
+
+        /* Pantalla de mantenimiento */
+        #mantenimiento-overlay {
+            padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        }
+        .mant-card { padding: clamp(1.4rem, 5vw, 2.5rem) clamp(1.1rem, 5vw, 2rem); }
+        .mant-logo { width: clamp(90px, 28vw, 130px); }
+        .mant-titulo { font-size: clamp(1.35rem, 6vw, 1.7rem); }
+        .mant-texto { font-size: clamp(1rem, 4vw, 1.08rem); }
+        .mant-versiculo { font-size: clamp(1.1rem, 4.6vw, 1.3rem); padding: .9rem 1rem; }
+        @media (max-height: 560px) {
+            #mantenimiento-overlay { align-items: flex-start; }
+            .mant-logo { width: 70px; margin-bottom: .3rem; }
+            .mant-engranes { display: none; }
+            .mant-texto { margin-bottom: 1rem; }
+        }
+
+        /* Panel de administración: barra de botones, pestañas y formularios en pantallas chicas */
+        @media (max-width: 1000px) {
+            .dev-floating-controls { right: 72px !important; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 4px 4px 6px; }
+            .dev-floating-controls::-webkit-scrollbar { display: none; }
+            .dev-floating-controls .btn-dev { flex: 0 0 auto; white-space: nowrap; }
+            .dev-floating-controls { padding-bottom: 14px; }
+            .dev-floating-controls .btn-dev { box-shadow: 0 4px 10px rgba(15, 51, 128, 0.25); }
+        }
+        @media (max-width: 768px) {
+            .cfg-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 6px; margin-left: -.2rem; margin-right: -.2rem; }
+            .cfg-tabs::-webkit-scrollbar { display: none; }
+            .cfg-tab { flex: 0 0 auto; white-space: nowrap; }
+            .cfg-pane .mant-bar { padding: 1rem; }
+            .mant-btns { width: 100%; }
+            .mant-btns .mant-btn, .mant-btns .cfg-peligro { flex: 1 1 100%; }
+            .cfg-barra-fila .et { width: 88px; font-size: .82rem; }
+            .cfg-barra-fila .n { width: 36px; }
+            .cfg-tabla th, .cfg-tabla td { padding: .5rem .35rem; font-size: .85rem; }
+            .cfg-total { font-size: 1.9rem; }
+            .login-card { padding: 1.6rem 1.3rem; }
+        }
     </style>
 </head>
 <body>
