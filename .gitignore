@@ -1,6 +1,10 @@
-<<<<<<< HEAD
-database.sqlite
-=======
-database.sqlite
->>>>>>> 876f5ec6874e836718d70aff26b0e094f784dd9f
-uploads/
+node_modules/
+.env
+
+# Datos vivos del sitio: NO deben viajar a GitHub (viven en el disco persistente de Render)
+idec_peronia.db
+idec_peronia.db-journal
+idec_peronia.db-wal
+idec_peronia.db-shm
+backups/
+public/uploads/
