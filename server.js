@@ -7,6 +7,8 @@ const multer = require('multer');
 const fs = require('fs');
 const crypto = require('crypto');
 const sharp = require('sharp'); // <--- Importado para compresión de imágenes
+const readline = require('readline');
+const { once } = require('events');
 
 // Carpeta donde viven los datos (base de datos, fotos y respaldos).
 // En un hosting en la nube, apúntala a un disco persistente con la variable DATA_DIR.
@@ -203,6 +205,7 @@ function descartarArchivos(files) {
 function describirAccion(metodo, p) {
     const partes = p.replace(/^\//, '').split('/');
     const nombres = { configuracion: 'la configuración', contenido: 'una sección', apartados: 'un cuadro', avisos: 'un aviso del calendario', 'redes-sociales': 'una red social', galeria: 'un elemento de la galería', usuarios: 'un administrador', cuenta: 'su contraseña' };
+    if (partes[0] === 'respaldo') return 'Restauró un respaldo completo del sitio';
     if (partes[1] === 'logo') return 'Cambió el logo';
     if (partes[0] === 'cuenta') return 'Cambió su contraseña';
     const recurso = nombres[partes[0]] || partes[0];
@@ -959,6 +962,141 @@ app.get('/api/historial', async (req, res) => {
     if (!soloAdmin(req, res)) return;
     try { res.json(await db.all('SELECT fecha, usuario, accion FROM historial ORDER BY id DESC LIMIT 200')); }
     catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ============================================================
+//  RESPALDO COMPLETO (descargar / restaurar)
+//  Formato .idec: una línea JSON por registro (se procesa en flujo, sin cargar todo en memoria):
+//    {"t":"meta"} · {"t":"tabla","nombre":...,"filas":[...]} · {"t":"archivo","nombre":...,"data":base64} · {"t":"fin"}
+//  Incluye: configuración (textos, colores, logo, mapa), secciones y su orden, cuadros y su orden,
+//  posición/tamaño de las fotos, avisos, redes sociales, galería y TODOS los archivos de /uploads usados.
+//  No incluye: usuarios/contraseñas, visitas ni historial (para no bloquear accesos ni mezclar estadísticas).
+// ============================================================
+const TABLAS_RESPALDO = ['configuracion', 'contenido', 'apartados', 'avisos', 'redes_sociales', 'galeria'];
+const ORDEN_TABLA = { configuracion: 'rowid', contenido: 'orden ASC, rowid', apartados: 'orden ASC, id', avisos: 'id', redes_sociales: 'id', galeria: 'id' };
+const NOMBRE_ARCHIVO_OK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
+
+function archivosUsados(tablas) {
+    const set = new Set();
+    const re = /\/uploads\/([A-Za-z0-9][A-Za-z0-9._-]*)/g;
+    for (const filas of Object.values(tablas)) {
+        for (const fila of filas) {
+            for (const v of Object.values(fila)) {
+                if (typeof v !== 'string') continue;
+                let m; re.lastIndex = 0;
+                while ((m = re.exec(v))) set.add(m[1]);
+            }
+        }
+    }
+    return [...set];
+}
+
+async function escribir(res, texto) {
+    if (!res.write(texto)) await once(res, 'drain');
+}
+
+app.get('/api/respaldo', async (req, res) => {
+    if (!soloAdmin(req, res)) return;
+    try {
+        const tablas = {};
+        for (const t of TABLAS_RESPALDO) tablas[t] = await db.all(`SELECT * FROM ${t} ORDER BY ${ORDEN_TABLA[t]}`);
+        const usados = archivosUsados(tablas);
+        const presentes = usados.filter(n => fs.existsSync(path.join(uploadDir, n)));
+        const faltantes = usados.filter(n => !presentes.includes(n));
+
+        const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+        res.set({
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="respaldo-idec-${sello}.idec"`,
+            'X-Respaldo-Archivos': String(presentes.length),
+            'X-Respaldo-Faltantes': String(faltantes.length),
+            'Access-Control-Expose-Headers': 'X-Respaldo-Archivos, X-Respaldo-Faltantes'
+        });
+        await escribir(res, JSON.stringify({ t: 'meta', tipo: 'respaldo-idec', version: 2, fecha: new Date().toISOString() }) + '\n');
+        for (const t of TABLAS_RESPALDO) await escribir(res, JSON.stringify({ t: 'tabla', nombre: t, filas: tablas[t] }) + '\n');
+        for (const nombre of presentes) {
+            await escribir(res, `{"t":"archivo","nombre":${JSON.stringify(nombre)},"data":"`);
+            for await (const trozo of fs.createReadStream(path.join(uploadDir, nombre), { highWaterMark: 3 * 256 * 1024 })) {
+                await escribir(res, trozo.toString('base64'));
+            }
+            await escribir(res, '"}\n');
+        }
+        res.end(JSON.stringify({ t: 'fin', archivos: presentes.length, faltantes }) + '\n');
+    } catch (e) {
+        console.error('Error al crear el respaldo:', e.message);
+        if (!res.headersSent) res.status(500).json({ error: e.message }); else res.destroy();
+    }
+});
+
+app.post('/api/respaldo', async (req, res) => {
+    const tmp = path.join(DATA_DIR, 'restaurando-' + Date.now());
+    const limpiar = () => { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} };
+    try {
+        fs.mkdirSync(tmp, { recursive: true });
+        const tablas = {};
+        const archivos = [];
+        let meta = null, fin = false;
+
+        const rl = readline.createInterface({ input: req, crlfDelay: Infinity });
+        for await (const linea of rl) {
+            if (!linea.trim()) continue;
+            let reg;
+            try { reg = JSON.parse(linea); } catch (e) { throw new Error('El archivo está dañado o incompleto.'); }
+            if (!meta) {
+                if (reg.t !== 'meta' || reg.tipo !== 'respaldo-idec') throw new Error('El archivo no es un respaldo de este sitio.');
+                if (reg.version !== 2) throw new Error('Versión de respaldo no compatible.');
+                meta = reg;
+            } else if (reg.t === 'tabla') {
+                if (!TABLAS_RESPALDO.includes(reg.nombre) || !Array.isArray(reg.filas)) throw new Error('Tabla no válida en el respaldo.');
+                tablas[reg.nombre] = reg.filas;
+            } else if (reg.t === 'archivo') {
+                if (!NOMBRE_ARCHIVO_OK.test(reg.nombre || '') || typeof reg.data !== 'string') throw new Error('Archivo no válido en el respaldo.');
+                fs.writeFileSync(path.join(tmp, reg.nombre), Buffer.from(reg.data, 'base64'));
+                archivos.push(reg.nombre);
+            } else if (reg.t === 'fin') { fin = true; }
+        }
+        if (!meta) throw new Error('El archivo está vacío.');
+        if (!fin) throw new Error('El respaldo está incompleto (se cortó la descarga o el archivo).');
+        for (const t of TABLAS_RESPALDO) if (!Array.isArray(tablas[t])) throw new Error(`Falta la tabla «${t}» en el respaldo.`);
+        if (!tablas.contenido.length || !tablas.configuracion.length) throw new Error('El respaldo no tiene contenido.');
+
+        // Copia de seguridad del estado actual antes de tocar nada
+        try {
+            const dir = path.join(DATA_DIR, 'backups');
+            fs.mkdirSync(dir, { recursive: true });
+            const sello = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+            const destino = path.join(dir, `idec_peronia_${sello}_antes-de-restaurar.db`);
+            if (!fs.existsSync(destino)) await db.exec(`VACUUM INTO '${destino.replace(/'/g, "''")}'`);
+        } catch (e) { console.error('No se pudo guardar la copia previa a la restauración:', e.message); }
+
+        // 1) Archivos (fotos, logo, videos) de vuelta a /uploads
+        for (const nombre of archivos) {
+            const origen = path.join(tmp, nombre), destino = path.join(uploadDir, nombre);
+            try { fs.renameSync(origen, destino); } catch (e) { fs.copyFileSync(origen, destino); fs.unlinkSync(origen); }
+        }
+
+        // 2) Base de datos, todo o nada
+        await db.exec('BEGIN');
+        try {
+            for (const t of TABLAS_RESPALDO) {
+                const columnas = (await db.all(`PRAGMA table_info(${t})`)).map(c => c.name);
+                await db.run(`DELETE FROM ${t}`);
+                for (const fila of tablas[t]) {
+                    const claves = Object.keys(fila).filter(k => columnas.includes(k));
+                    if (!claves.length) continue;
+                    await db.run(`INSERT INTO ${t} (${claves.join(', ')}) VALUES (${claves.map(() => '?').join(', ')})`, claves.map(k => fila[k]));
+                }
+            }
+            await db.exec('COMMIT');
+        } catch (e) { try { await db.exec('ROLLBACK'); } catch (x) {} throw e; }
+
+        limpiar();
+        res.json({ success: true, archivos: archivos.length });
+    } catch (e) {
+        limpiar();
+        if (!res.headersSent) res.status(400).json({ error: e.message });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
