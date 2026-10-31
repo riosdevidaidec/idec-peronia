@@ -13,6 +13,29 @@ const sharp = require('sharp'); // <--- Importado para compresión de imágenes
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : __dirname;
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+// En Render el disco normal se BORRA en cada deploy. Solo un "Persistent Disk" conserva los datos.
+if (process.env.RENDER && !process.env.DATA_DIR) {
+    console.warn('\n⚠️  ATENCIÓN: estás en Render pero DATA_DIR no está definida.');
+    console.warn('⚠️  La base de datos y las fotos se perderán en el próximo deploy.');
+    console.warn('⚠️  Crea un Persistent Disk (Mount Path /var/data) y agrega la variable DATA_DIR=/var/data\n');
+}
+
+// Primera vez con un disco persistente vacío: copia la base y las fotos que vienen en el repositorio.
+// Nunca sobrescribe nada que ya exista en el disco.
+function sembrarDatosIniciales(uploadsDestino) {
+    if (DATA_DIR === __dirname) return;
+    try {
+        const dbDestino = path.join(DATA_DIR, 'idec_peronia.db');
+        const dbOrigen = path.join(__dirname, 'idec_peronia.db');
+        if (!fs.existsSync(dbDestino) && fs.existsSync(dbOrigen)) {
+            fs.copyFileSync(dbOrigen, dbDestino);
+            console.log('Base de datos inicial copiada al disco persistente.');
+        }
+        const upOrigen = path.join(__dirname, 'public', 'uploads');
+        if (fs.existsSync(upOrigen)) fs.cpSync(upOrigen, uploadsDestino, { recursive: true, force: false });
+    } catch (e) { console.error('No se pudieron copiar los datos iniciales:', e.message); }
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -21,6 +44,7 @@ const uploadDir = process.env.DATA_DIR ? path.join(DATA_DIR, 'uploads') : path.j
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
+sembrarDatosIniciales(uploadDir);
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -103,7 +127,7 @@ const sesiones = new Map();
 
 function crearSesion(user) {
     const token = crypto.randomBytes(32).toString('hex');
-    sesiones.set(token, { exp: Date.now() + SESION_HORAS * 3600 * 1000, id: user.id, usuario: user.usuario, rol: user.rol || 'admin' });
+    sesiones.set(token, { exp: Date.now() + SESION_HORAS * 3600 * 1000, id: user.id, usuario: user.usuario, rol: user.rol || 'admin', permisos: permisosDe(user) });
     return token;
 }
 
@@ -120,22 +144,59 @@ function cerrarSesionesDe(idUsuario, exceptoToken) {
     for (const [t, ses] of sesiones) if (ses.id === idUsuario && t !== exceptoToken) sesiones.delete(t);
 }
 
-// Permisos por rol: admin = todo; editor = textos, cuadros, avisos y redes; galeria = solo galería
-const ROLES_VALIDOS = ['admin', 'editor', 'galeria'];
+// ------------------------------------------------------------
+//  PERMISOS (cada persona puede tener solo lo que necesita)
+//   textos    -> editar títulos y textos (secciones y cuadros)
+//   imagenes  -> agregar, quitar y acomodar fotos de secciones y cuadros
+//   cuadros   -> crear, borrar y mover cuadros
+//   secciones -> crear, borrar y mover secciones del menú
+//   galeria   -> subir y borrar fotos/videos de la Galería
+//   avisos    -> eventos del calendario
+//   redes     -> redes sociales
+//   ubicacion -> mapa y enlace de ubicación
+//  El rol 'admin' puede todo (incluye usuarios, estilos, mantenimiento y respaldos).
+// ------------------------------------------------------------
+const PERMISOS = ['textos', 'imagenes', 'cuadros', 'secciones', 'galeria', 'avisos', 'redes', 'ubicacion'];
+const ROLES_VALIDOS = ['admin', 'editor', 'galeria', 'personalizado'];
+const PRESETS = {
+    admin: PERMISOS.slice(),
+    editor: ['textos', 'imagenes', 'cuadros', 'secciones', 'avisos', 'redes', 'ubicacion'], // igual que antes
+    galeria: ['galeria'],                                                                    // igual que antes
+    personalizado: []
+};
+
+function limpiarPermisos(lista) {
+    return Array.isArray(lista) ? PERMISOS.filter(p => lista.includes(p)) : [];
+}
+// Usuarios antiguos (rol editor/galeria sin lista) siguen funcionando igual que antes
+function permisosDe(user) {
+    if ((user.rol || 'admin') === 'admin') return PERMISOS.slice();
+    if (user.permisos) { try { return limpiarPermisos(JSON.parse(user.permisos)); } catch (e) {} }
+    return (PRESETS[user.rol] || []).slice();
+}
+function tiene(ses, permiso) { return !!ses && (ses.rol === 'admin' || ses.permisos.includes(permiso)); }
+
 function rutaEn(p, base) { return p === base || p.startsWith(base + '/'); }
 function permitido(ses, metodo, p, body) {
     if (ses.rol === 'admin') return true;
     if (p === '/logout' || p === '/cuenta/password') return true;
-    if (ses.rol === 'galeria') return rutaEn(p, '/galeria');
-    if (ses.rol === 'editor') {
-        if (['/contenido', '/apartados', '/avisos', '/redes-sociales'].some(b => rutaEn(p, b))) return true;
-        // El editor solo puede guardar la ubicación del mapa dentro de la configuración
-        if (p === '/configuracion' && metodo === 'PUT') {
-            const claves = Object.keys(body || {});
-            return claves.length > 0 && claves.every(k => ['mapa_direccion', 'ubicacion_url'].includes(k));
-        }
+    const t = k => ses.permisos.includes(k);
+    if (rutaEn(p, '/galeria')) return t('galeria');
+    if (rutaEn(p, '/avisos')) return t('avisos');
+    if (rutaEn(p, '/redes-sociales')) return t('redes');
+    if (p === '/configuracion' && metodo === 'PUT') {
+        // Solo la ubicación del mapa dentro de la configuración
+        const claves = Object.keys(body || {});
+        return t('ubicacion') && claves.length > 0 && claves.every(k => ['mapa_direccion', 'ubicacion_url'].includes(k));
     }
-    return false;
+    if (rutaEn(p, '/apartados')) return metodo === 'PUT' ? (t('textos') || t('imagenes')) : t('cuadros');
+    if (rutaEn(p, '/contenido')) return metodo === 'PUT' ? (t('textos') || t('imagenes')) : t('secciones');
+    return false; // usuarios, logo, estilos, mantenimiento, historial... solo administrador
+}
+
+// Borra las fotos temporales que multer ya guardó cuando no se van a usar
+function descartarArchivos(files) {
+    (files || []).forEach(f => { try { if (f && f.path && fs.existsSync(f.path)) fs.unlinkSync(f.path); } catch (e) {} });
 }
 
 // Texto legible para el historial de cambios
@@ -305,11 +366,13 @@ async function iniciarBD() {
         );
     `);
     try { await db.exec(`ALTER TABLE usuarios ADD COLUMN rol TEXT DEFAULT 'admin';`); } catch (e) {}
+    try { await db.exec(`ALTER TABLE usuarios ADD COLUMN permisos TEXT;`); } catch (e) {}
 
     const totalUsuarios = await db.get('SELECT COUNT(*) AS n FROM usuarios');
     if (totalUsuarios.n === 0) {
-        const usuarioDefault = 'Andres.cj';
-        const passwordDefault = 'CASTAÑONJUAREZ_2000';
+        // Mejor define ADMIN_USER y ADMIN_PASSWORD en Render y no dejes contraseñas escritas en el código
+        const usuarioDefault = process.env.ADMIN_USER || 'Andres.cj';
+        const passwordDefault = process.env.ADMIN_PASSWORD || 'CASTAÑONJUAREZ_2000';
         const passwordHasheada = hashPassword(passwordDefault);
         
         await db.run('INSERT INTO usuarios (usuario, password) VALUES (?, ?)', [usuarioDefault, passwordHasheada]);
@@ -434,7 +497,8 @@ app.post('/api/login', async (req, res) => {
                 await db.run('UPDATE usuarios SET password = ? WHERE id = ?', [hashPassword(String(password).trim()), user.id]);
             }
             intentosLogin.delete(ip);
-            res.json({ success: true, token: crearSesion(user), usuario: user.usuario, rol: user.rol || 'admin', message: 'Bienvenido' });
+            const token = crearSesion(user);
+            res.json({ success: true, token, usuario: user.usuario, rol: user.rol || 'admin', permisos: sesiones.get(token).permisos, message: 'Bienvenido' });
         } else {
             registrarFallo(ip);
             res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
@@ -442,6 +506,13 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
+});
+
+// El panel pregunta aquí quién es y qué puede hacer (así los cambios de permisos se ven sin volver a entrar)
+app.get('/api/cuenta', (req, res) => {
+    const ses = sesionDe(req);
+    if (!ses) return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+    res.json({ usuario: ses.usuario, rol: ses.rol, permisos: ses.permisos });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -478,7 +549,16 @@ app.put('/api/contenido/:seccion', (req, res) => {
             const { seccion } = req.params;
             const actual = await db.get('SELECT * FROM contenido WHERE seccion = ?', [seccion]);
             if (!actual) return res.status(404).json({ error: 'Sección no encontrada' });
-            const { titulo, texto, layout, tamano, conservar } = req.body;
+            const puedeTexto = tiene(req.sesion, 'textos');
+            const puedeImg = tiene(req.sesion, 'imagenes');
+            if (!puedeImg) descartarArchivos(req.files);
+            const body = req.body;
+            // Lo que la persona no tiene permitido tocar se queda exactamente como estaba
+            const titulo = puedeTexto ? body.titulo : actual.titulo;
+            const texto = puedeTexto ? body.texto : actual.texto;
+            const layout = puedeImg ? body.layout : actual.layout;
+            const tamano = puedeImg ? body.tamano : actual.tamano;
+            const conservar = puedeImg ? body.conservar : undefined;
 
             let imgs = parseImgs(actual.imagenes);
             if (conservar !== undefined) {
@@ -543,8 +623,13 @@ app.post('/api/apartados', (req, res) => {
     uploadImg.array('imagenes', 12)(req, res, async (err) => {
         if (err) return res.status(400).json({ error: err.message });
         try {
-            const { seccion, subtitulo = '', contenido = '', layout = 'arriba', tamano = 'mediano' } = req.body;
-            const files = req.files || [];
+            const puedeTexto = tiene(req.sesion, 'textos');
+            const puedeImg = tiene(req.sesion, 'imagenes');
+            const { seccion, layout = 'arriba', tamano = 'mediano' } = req.body;
+            const subtitulo = puedeTexto ? (req.body.subtitulo || '') : '';
+            const contenido = puedeTexto ? (req.body.contenido || '') : '';
+            const files = puedeImg ? (req.files || []) : [];
+            if (!puedeImg) descartarArchivos(req.files);
             if (!seccion) return res.status(400).json({ error: 'Falta la sección' });
             if (!subtitulo.trim() && !contenido.trim() && !files.length) return res.status(400).json({ error: 'El cuadro está vacío' });
             
@@ -569,21 +654,31 @@ app.put('/api/apartados/:id', (req, res) => {
         try {
             const actual = await db.get('SELECT * FROM apartados WHERE id = ?', [req.params.id]);
             if (!actual) return res.status(404).json({ error: 'Cuadro no encontrado' });
-            const { subtitulo = '', contenido = '', layout = 'arriba', tamano = 'mediano', conservar = '[]' } = req.body;
-            const antes = parseImgs(actual.imagenes);
-            const quedan = parseImgs(conservar).filter(u => antes.includes(u));
-            antes.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
-            
-            const nuevasImgs = [];
-            for (const file of (req.files || [])) {
-                const optimizedUrl = await procesarImagenSharp(file.path);
-                nuevasImgs.push(optimizedUrl);
-            }
-            const imgs = quedan.concat(nuevasImgs);
+            const puedeTexto = tiene(req.sesion, 'textos');
+            const puedeImg = tiene(req.sesion, 'imagenes');
+            if (!puedeImg) descartarArchivos(req.files);
+            // Lo que la persona no tiene permitido tocar se queda exactamente como estaba
+            const subtitulo = puedeTexto ? (req.body.subtitulo || '') : actual.subtitulo;
+            const contenido = puedeTexto ? (req.body.contenido || '') : actual.contenido;
+            const layout = puedeImg ? (req.body.layout || 'arriba') : actual.layout;
+            const tamano = puedeImg ? (req.body.tamano || 'mediano') : actual.tamano;
 
-            if (!subtitulo.trim() && !contenido.trim() && !imgs.length) return res.status(400).json({ error: 'El cuadro está vacío' });
+            let imgs = parseImgs(actual.imagenes);
+            if (puedeImg) {
+                const antes = imgs;
+                const quedan = parseImgs(req.body.conservar || '[]').filter(u => antes.includes(u));
+                antes.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
+                const nuevasImgs = [];
+                for (const file of (req.files || [])) {
+                    const optimizedUrl = await procesarImagenSharp(file.path);
+                    nuevasImgs.push(optimizedUrl);
+                }
+                imgs = quedan.concat(nuevasImgs);
+            }
+
+            if (!String(subtitulo).trim() && !String(contenido).trim() && !imgs.length) return res.status(400).json({ error: 'El cuadro está vacío' });
             await db.run('UPDATE apartados SET subtitulo = ?, contenido = ?, imagenes = ?, layout = ?, tamano = ? WHERE id = ?',
-                [subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', req.params.id]);
+                [String(subtitulo).trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', req.params.id]);
             res.json({ success: true });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -766,9 +861,21 @@ app.post('/api/cuenta/password', async (req, res) => {
 
 app.get('/api/usuarios', async (req, res) => {
     if (!soloAdmin(req, res)) return;
-    try { res.json(await db.all("SELECT id, usuario, COALESCE(rol, 'admin') AS rol FROM usuarios ORDER BY id ASC")); }
+    try {
+        const filas = await db.all("SELECT id, usuario, COALESCE(rol, 'admin') AS rol, permisos FROM usuarios ORDER BY id ASC");
+        res.json(filas.map(u => ({ id: u.id, usuario: u.usuario, rol: u.rol, permisos: permisosDe(u) })));
+    }
     catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Rol + lista de permisos que llegan del panel -> lo que se guarda en la base
+function normalizarAcceso(rol, permisos) {
+    if (!ROLES_VALIDOS.includes(rol)) return { error: 'Permisos no válidos.' };
+    if (rol === 'admin') return { rol: 'admin', permisos: null };
+    const lista = Array.isArray(permisos) ? limpiarPermisos(permisos) : PRESETS[rol].slice();
+    if (!lista.length) return { error: 'Marca al menos un permiso.' };
+    return { rol: 'personalizado', permisos: JSON.stringify(lista) };
+}
 
 app.post('/api/usuarios', async (req, res) => {
     try {
@@ -776,10 +883,31 @@ app.post('/api/usuarios', async (req, res) => {
         const nombre = String(usuario || '').trim();
         if (!nombre || nombre.length > 40) return res.status(400).json({ error: 'Escribe un nombre de usuario (máximo 40 caracteres).' });
         if (String(password || '').length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
-        if (!ROLES_VALIDOS.includes(rol)) return res.status(400).json({ error: 'Permisos no válidos.' });
+        const acceso = normalizarAcceso(rol, (req.body || {}).permisos);
+        if (acceso.error) return res.status(400).json({ error: acceso.error });
         const existe = await db.get('SELECT id FROM usuarios WHERE usuario = ?', [nombre]);
         if (existe) return res.status(400).json({ error: 'Ese usuario ya existe.' });
-        await db.run('INSERT INTO usuarios (usuario, password, rol) VALUES (?, ?, ?)', [nombre, hashPassword(String(password).trim()), rol]);
+        await db.run('INSERT INTO usuarios (usuario, password, rol, permisos) VALUES (?, ?, ?, ?)', [nombre, hashPassword(String(password).trim()), acceso.rol, acceso.permisos]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Cambiar los permisos de una persona que ya existe (se aplican de inmediato a su sesión abierta)
+app.put('/api/usuarios/:id', async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const user = await db.get("SELECT id, COALESCE(rol, 'admin') AS rol FROM usuarios WHERE id = ?", [id]);
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        const acceso = normalizarAcceso((req.body || {}).rol, (req.body || {}).permisos);
+        if (acceso.error) return res.status(400).json({ error: acceso.error });
+        if (user.rol === 'admin' && acceso.rol !== 'admin') {
+            if (id === req.sesion.id) return res.status(400).json({ error: 'No puedes quitarte a ti mismo el permiso de administrador.' });
+            const n = await db.get("SELECT COUNT(*) AS n FROM usuarios WHERE COALESCE(rol, 'admin') = 'admin'");
+            if (n.n <= 1) return res.status(400).json({ error: 'No se puede quitar al último administrador.' });
+        }
+        await db.run('UPDATE usuarios SET rol = ?, permisos = ? WHERE id = ?', [acceso.rol, acceso.permisos, id]);
+        const nuevos = permisosDe({ rol: acceso.rol, permisos: acceso.permisos });
+        for (const ses of sesiones.values()) if (ses.id === id) { ses.rol = acceso.rol; ses.permisos = nuevos; }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
