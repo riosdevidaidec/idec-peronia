@@ -43,6 +43,9 @@ const uploadImg = multer({
     fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
 });
 
+const LAYOUTS = ['arriba', 'abajo', 'izquierda', 'derecha'];
+const TAMANOS = ['pequeno', 'mediano', 'grande', 'completo'];
+
 function parseImgs(v) {
     try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
 }
@@ -235,6 +238,10 @@ async function iniciarBD() {
     try { await db.exec(`ALTER TABLE apartados ADD COLUMN layout TEXT DEFAULT 'arriba';`); } catch (e) {}
     try { await db.exec(`ALTER TABLE apartados ADD COLUMN orden INTEGER DEFAULT 0;`); } catch (e) {}
     try { await db.exec(`ALTER TABLE contenido ADD COLUMN orden INTEGER DEFAULT 0;`); } catch (e) {}
+    try { await db.exec(`ALTER TABLE contenido ADD COLUMN imagenes TEXT DEFAULT '[]';`); } catch (e) {}
+    try { await db.exec(`ALTER TABLE contenido ADD COLUMN layout TEXT DEFAULT 'arriba';`); } catch (e) {}
+    try { await db.exec(`ALTER TABLE contenido ADD COLUMN tamano TEXT DEFAULT 'mediano';`); } catch (e) {}
+    try { await db.exec(`ALTER TABLE apartados ADD COLUMN tamano TEXT DEFAULT 'mediano';`); } catch (e) {}
 
     // Configuración por defecto
     const configDefault = [
@@ -378,15 +385,30 @@ app.post('/api/contenido', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/contenido/:seccion', async (req, res) => {
-    try {
-        const { seccion } = req.params;
-        const { titulo, texto } = req.body;
-        await db.run('UPDATE contenido SET titulo = ?, texto = ? WHERE seccion = ?', [titulo, texto, seccion]);
-        res.json({ success: true, message: 'Contenido actualizado correctamente' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+app.put('/api/contenido/:seccion', (req, res) => {
+    uploadImg.array('imagenes', 12)(req, res, async (err) => {
+        if (err) return res.status(400).json({ error: err.message });
+        try {
+            const { seccion } = req.params;
+            const actual = await db.get('SELECT * FROM contenido WHERE seccion = ?', [seccion]);
+            if (!actual) return res.status(404).json({ error: 'Sección no encontrada' });
+            const { titulo, texto, layout, tamano, conservar } = req.body;
+
+            let imgs = parseImgs(actual.imagenes);
+            if (conservar !== undefined) {            // solo si el panel envía la lista de imágenes
+                const quedan = parseImgs(conservar).filter(u => imgs.includes(u));
+                imgs.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
+                imgs = quedan.concat((req.files || []).map(f => `/uploads/${f.filename}`));
+            }
+            await db.run('UPDATE contenido SET titulo = ?, texto = ?, imagenes = ?, layout = ?, tamano = ? WHERE seccion = ?',
+                [titulo, texto, JSON.stringify(imgs),
+                 LAYOUTS.includes(layout) ? layout : (actual.layout || 'arriba'),
+                 TAMANOS.includes(tamano) ? tamano : (actual.tamano || 'mediano'), seccion]);
+            res.json({ success: true, message: 'Contenido actualizado correctamente' });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
 });
 
 // Mover una sección en el menú (dir: -1 antes, 1 después)
@@ -410,6 +432,8 @@ app.delete('/api/contenido/:seccion', async (req, res) => {
             return res.status(400).json({ error: 'No se pueden eliminar las secciones principales.' });
         }
         await db.run('DELETE FROM contenido WHERE seccion = ?', [seccion]);
+        const propio = await db.get('SELECT imagenes FROM contenido WHERE seccion = ?', [seccion]);
+        if (propio) parseImgs(propio.imagenes).forEach(borrarArchivoUpload);
         const cuadros = await db.all('SELECT imagenes FROM apartados WHERE seccion = ?', [seccion]);
         cuadros.forEach(c => parseImgs(c.imagenes).forEach(borrarArchivoUpload));
         await db.run('DELETE FROM apartados WHERE seccion = ?', [seccion]);
@@ -423,20 +447,19 @@ app.get('/api/apartados', async (req, res) => {
     catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-const LAYOUTS = ['arriba', 'izquierda', 'derecha'];
 
 app.post('/api/apartados', (req, res) => {
     uploadImg.array('imagenes', 12)(req, res, async (err) => {
         if (err) return res.status(400).json({ error: err.message });
         try {
-            const { seccion, subtitulo = '', contenido = '', layout = 'arriba' } = req.body;
+            const { seccion, subtitulo = '', contenido = '', layout = 'arriba', tamano = 'mediano' } = req.body;
             const files = req.files || [];
             if (!seccion) return res.status(400).json({ error: 'Falta la sección' });
             if (!subtitulo.trim() && !contenido.trim() && !files.length) return res.status(400).json({ error: 'El cuadro está vacío' });
             const imgs = files.map(f => `/uploads/${f.filename}`);
             const mx = await db.get('SELECT COALESCE(MAX(orden), 0) AS m FROM apartados WHERE seccion = ?', [seccion]);
-            await db.run('INSERT INTO apartados (seccion, subtitulo, contenido, imagenes, layout, orden) VALUES (?, ?, ?, ?, ?, ?)',
-                [seccion, subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', mx.m + 1]);
+            await db.run('INSERT INTO apartados (seccion, subtitulo, contenido, imagenes, layout, tamano, orden) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [seccion, subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', mx.m + 1]);
             res.json({ success: true });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -448,14 +471,14 @@ app.put('/api/apartados/:id', (req, res) => {
         try {
             const actual = await db.get('SELECT * FROM apartados WHERE id = ?', [req.params.id]);
             if (!actual) return res.status(404).json({ error: 'Cuadro no encontrado' });
-            const { subtitulo = '', contenido = '', layout = 'arriba', conservar = '[]' } = req.body;
+            const { subtitulo = '', contenido = '', layout = 'arriba', tamano = 'mediano', conservar = '[]' } = req.body;
             const antes = parseImgs(actual.imagenes);
             const quedan = parseImgs(conservar).filter(u => antes.includes(u));
             antes.filter(u => !quedan.includes(u)).forEach(borrarArchivoUpload);
             const imgs = quedan.concat((req.files || []).map(f => `/uploads/${f.filename}`));
             if (!subtitulo.trim() && !contenido.trim() && !imgs.length) return res.status(400).json({ error: 'El cuadro está vacío' });
-            await db.run('UPDATE apartados SET subtitulo = ?, contenido = ?, imagenes = ?, layout = ? WHERE id = ?',
-                [subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', req.params.id]);
+            await db.run('UPDATE apartados SET subtitulo = ?, contenido = ?, imagenes = ?, layout = ?, tamano = ? WHERE id = ?',
+                [subtitulo.trim(), contenido, JSON.stringify(imgs), LAYOUTS.includes(layout) ? layout : 'arriba', TAMANOS.includes(tamano) ? tamano : 'mediano', req.params.id]);
             res.json({ success: true });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
